@@ -1,0 +1,37 @@
+#!/usr/bin/env php
+<?php
+/**
+ * Usage: php bin/create_admin.php <username> <password>
+ *
+ * Creates (or updates the password of) an admin account. Run this
+ * from the command line only — never expose account creation over
+ * HTTP without its own separate authorization check.
+ */
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../config/database.php';
+
+if ($argc !== 3) {
+    fwrite(STDERR, "Usage: php bin/create_admin.php <username> <password>\n");
+    exit(1);
+}
+
+[$script, $username, $password] = $argv;
+
+if (strlen($password) < 10) {
+    fwrite(STDERR, "Password must be at least 10 characters.\n");
+    exit(1);
+}
+
+$pdo = get_db_connection();
+$hash = password_hash($password, PASSWORD_DEFAULT);
+
+$stmt = $pdo->prepare('
+    INSERT INTO admin_users (username, password_hash)
+    VALUES (:u, :h)
+    ON DUPLICATE KEY UPDATE password_hash = :h2
+');
+$stmt->execute([':u' => $username, ':h' => $hash, ':h2' => $hash]);
+
+echo "Admin account ready for username: {$username}\n";

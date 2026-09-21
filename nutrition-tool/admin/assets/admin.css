@@ -1,0 +1,120 @@
+/* Admin panel — reuses the public site's tokens (loaded first),
+   adds form and table treatments for CRUD screens. */
+
+.admin-body {
+    background: var(--color-bg);
+}
+
+.admin-auth-wrap {
+    max-width: 360px;
+    margin: 4rem auto;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 2rem;
+}
+
+.admin-auth-wrap h1 {
+    font-family: var(--font-display);
+    font-size: 1.5rem;
+    margin-top: 0;
+}
+
+.admin-auth-wrap form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.admin-auth-wrap label { font-size: 0.85rem; color: var(--color-muted); margin-top: 0.6rem; }
+
+.admin-auth-wrap input,
+.admin-form input,
+.admin-form select {
+    font-family: var(--font-body);
+    font-size: 1rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+}
+
+.admin-auth-wrap button,
+.admin-form button,
+.btn {
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.6rem 1.1rem;
+    border-radius: 6px;
+    border: 1px solid var(--color-primary);
+    background: var(--color-primary);
+    color: #fff;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn.btn-secondary {
+    background: transparent;
+    color: var(--color-primary);
+}
+
+.btn.btn-danger {
+    background: var(--color-danger);
+    border-color: var(--color-danger);
+}
+
+.alert-error {
+    background: #FBEAE6;
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.alert-success {
+    background: #EAF1E8;
+    color: var(--color-primary-dk);
+    border: 1px solid var(--color-primary);
+    padding: 0.6rem 0.8rem;
+    border-radius: 6px;
+    font-size: 0.9rem;
+}
+
+.admin-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background: var(--color-primary-dk);
+    color: #fff;
+}
+
+.admin-nav a { color: #fff; text-decoration: none; margin-right: 1rem; font-weight: 500; }
+.admin-nav .spacer { flex: 1; }
+
+.admin-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-width: 480px;
+}
+
+.admin-form label { font-size: 0.85rem; color: var(--color-muted); margin-top: 0.7rem; }
+.admin-form .actions { margin-top: 1.2rem; display: flex; gap: 0.6rem; }
+
+table.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+}
+
+table.admin-table th, table.admin-table td {
+    text-align: left;
+    padding: 0.6rem;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 0.92rem;
+}
+
+table.admin-table th { color: var(--color-muted); font-weight: 500; }

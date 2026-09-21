@@ -1,0 +1,220 @@
+/* ============================================================
+   Umurima Data — Nutrition-per-Cost tool
+   Design: grounded in Rwandan harvest/market imagery —
+   deep field-green, harvest-gold accent, warm parchment paper.
+   Deliberately avoids the generic cream+terracotta / SaaS-card
+   defaults: hairline rules instead of card shadows, a serif
+   with real character for headings, tabular numbers for prices.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+    --color-bg:          #F5F6F0;
+    --color-surface:     #FFFFFF;
+    --color-ink:         #1F2A1D;
+    --color-muted:       #6B6355;
+    --color-primary:     #2F4A34;
+    --color-primary-dk:  #1F3324;
+    --color-accent:      #C98A2C;
+    --color-border:      #DEDACC;
+    --color-danger:      #A6402F;
+
+    --font-display: 'Fraunces', Georgia, serif;
+    --font-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-padding-top: 1rem; }
+
+body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.55;
+}
+
+a { color: var(--color-primary); }
+a:focus-visible,
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+}
+
+.site-header {
+    background: var(--color-primary);
+    color: #F5F6F0;
+    padding: 2.5rem 1.5rem 2.75rem;
+}
+
+.site-header .wrap {
+    max-width: 880px;
+    margin: 0 auto;
+}
+
+.site-header h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(1.8rem, 4vw, 2.5rem);
+    margin: 0 0 0.6rem;
+    max-width: 20ch;
+}
+
+.site-header p {
+    margin: 0;
+    max-width: 58ch;
+    color: #DCE3D6;
+    font-size: 1.05rem;
+}
+
+main.wrap {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    align-items: center;
+    margin-bottom: 1.75rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.controls label {
+    font-size: 0.9rem;
+    color: var(--color-muted);
+    margin-right: 0.25rem;
+}
+
+.nutrient-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.nutrient-tabs button {
+    font-family: var(--font-body);
+    font-size: 0.92rem;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-ink);
+    cursor: pointer;
+}
+
+.nutrient-tabs button.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #fff;
+}
+
+select {
+    font-family: var(--font-body);
+    font-size: 0.92rem;
+    padding: 0.45rem 0.7rem;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-ink);
+}
+
+.result-note {
+    color: var(--color-muted);
+    font-size: 0.92rem;
+    margin: 0 0 1rem;
+}
+
+table.ledger {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+table.ledger thead th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 0.82rem;
+    color: var(--color-muted);
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--color-ink);
+}
+
+table.ledger thead th.num,
+table.ledger td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+table.ledger tbody td {
+    padding: 0.85rem 0.6rem;
+    border-bottom: 1px solid var(--color-border);
+    vertical-align: top;
+}
+
+table.ledger tbody tr:hover {
+    background: rgba(47, 74, 52, 0.05);
+}
+
+.rank {
+    font-family: var(--font-display);
+    font-weight: 600;
+    color: var(--color-accent);
+    width: 2.2rem;
+}
+
+.food-name {
+    font-weight: 600;
+}
+
+.food-meta {
+    display: block;
+    color: var(--color-muted);
+    font-size: 0.82rem;
+    margin-top: 0.15rem;
+}
+
+.nutrient-value {
+    font-weight: 600;
+    color: var(--color-primary-dk);
+}
+
+.empty-state {
+    padding: 2.5rem 1rem;
+    text-align: center;
+    color: var(--color-muted);
+    border: 1px dashed var(--color-border);
+    border-radius: 8px;
+}
+
+.site-footer {
+    text-align: center;
+    color: var(--color-muted);
+    font-size: 0.85rem;
+    padding: 2rem 1.5rem 3rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+}
+
+@media (max-width: 560px) {
+    table.ledger thead { display: none; }
+    table.ledger, table.ledger tbody, table.ledger tr, table.ledger td {
+        display: block;
+        width: 100%;
+    }
+    table.ledger tr {
+        padding: 0.9rem 0.2rem;
+        border-bottom: 1px solid var(--color-border);
+    }
+    table.ledger td { border-bottom: none; padding: 0.15rem 0.2rem; }
+    .rank { display: inline-block; margin-right: 0.5rem; }
+}
