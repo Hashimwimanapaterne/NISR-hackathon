@@ -19,16 +19,22 @@ if ($food === false) {
     die('Food not found.');
 }
 
+$priceInput = '';
+$marketInput = '';
+$districtInput = '';
+$recordedOnInput = date('Y-m-d');
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     verify_csrf($_POST['csrf_token'] ?? '');
 
-    $price      = (float) ($_POST['price_rwf'] ?? 0);
-    $market     = trim((string) ($_POST['market_name'] ?? ''));
-    $district   = trim((string) ($_POST['district'] ?? ''));
-    $recordedOn = (string) ($_POST['recorded_on'] ?? date('Y-m-d'));
+    $priceInput = trim((string) ($_POST['price_rwf'] ?? ''));
+    $marketInput = trim((string) ($_POST['market_name'] ?? ''));
+    $districtInput = trim((string) ($_POST['district'] ?? ''));
+    $recordedOnInput = (string) ($_POST['recorded_on'] ?? date('Y-m-d'));
+    $price = (float) $priceInput;
 
     if ($price <= 0) $errors[] = 'Price must be a positive number.';
-    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $recordedOn)) $errors[] = 'Date is invalid.';
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $recordedOnInput)) $errors[] = 'Date is invalid.';
 
     if (empty($errors)) {
         $stmt = $pdo->prepare('
@@ -38,9 +44,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([
             ':food_id' => $foodId,
             ':price' => $price,
-            ':market' => $market !== '' ? $market : null,
-            ':district' => $district !== '' ? $district : null,
-            ':recorded_on' => $recordedOn,
+            ':market' => $marketInput !== '' ? $marketInput : null,
+            ':district' => $districtInput !== '' ? $districtInput : null,
+            ':recorded_on' => $recordedOnInput,
         ]);
 
         header('Location: index.php?msg=' . urlencode('Price recorded for ' . $food['name'] . '.'));
@@ -53,41 +59,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Add price — <?= h($food['name']) ?></title>
+    <meta name="theme-color" content="#173d31">
+    <title>Add price — <?= h($food['name']) ?> — Umurima Data admin</title>
     <link rel="stylesheet" href="../public/assets/css/style.css">
     <link rel="stylesheet" href="assets/admin.css">
 </head>
 <body class="admin-body">
 
-<nav class="admin-nav">
-    <a href="index.php">Foods</a>
-    <a href="food_form.php">Add food</a>
-    <span class="spacer"></span>
-    <a href="logout.php">Sign out</a>
+<nav class="admin-nav" aria-label="Admin navigation">
+    <div class="admin-nav-inner">
+        <a class="brand" href="index.php"><span class="brand-mark" aria-hidden="true">U</span><span>umurima<span class="brand-light">data</span></span></a>
+        <div class="admin-links">
+            <a href="index.php" aria-current="page">Foods &amp; prices</a>
+            <a href="food_form.php">Add food</a>
+        </div>
+        <span class="spacer"></span>
+        <span class="admin-identity">Signed in as <?= h($_SESSION['admin_username'] ?? '') ?></span>
+        <a class="public-link" href="../public/index.php">View public tool ↗</a>
+        <a href="logout.php">Sign out</a>
+    </div>
 </nav>
 
 <main class="wrap">
-    <h1>Record a price — <?= h($food['name']) ?></h1>
+    <div class="admin-page-heading">
+        <div>
+            <p class="section-kicker">Market price update</p>
+            <h1>Record a price</h1>
+            <p><?= h($food['name']) ?> <span aria-hidden="true">·</span> price per <?= h($food['unit_label']) ?></p>
+        </div>
+    </div>
 
     <?php foreach ($errors as $err): ?>
-        <p class="alert-error"><?= h($err) ?></p>
+        <p class="alert-error" role="alert"><?= h($err) ?></p>
     <?php endforeach; ?>
 
-    <form method="post" class="admin-form" novalidate>
+    <form method="post" class="admin-form">
         <?= csrf_field() ?>
         <input type="hidden" name="food_id" value="<?= (int) $food['id'] ?>">
 
-        <label for="price_rwf">Price (RWF per <?= h($food['unit_label']) ?>)</label>
-        <input type="number" step="0.01" min="0" id="price_rwf" name="price_rwf" required>
+        <section class="form-panel" aria-labelledby="price-panel-title">
+            <h2 id="price-panel-title">Price details</h2>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label for="price_rwf">Price (RWF per <?= h($food['unit_label']) ?>)</label>
+                    <input type="number" step="0.01" min="0.01" id="price_rwf" name="price_rwf" required value="<?= h($priceInput) ?>" placeholder="e.g. 1200">
+                </div>
 
-        <label for="market_name">Market name (optional)</label>
-        <input type="text" id="market_name" name="market_name" placeholder="e.g. Kimironko">
+                <div class="form-field">
+                    <label for="recorded_on">Date recorded</label>
+                    <input type="date" id="recorded_on" name="recorded_on" value="<?= h($recordedOnInput) ?>" required>
+                </div>
 
-        <label for="district">District (optional)</label>
-        <input type="text" id="district" name="district" placeholder="e.g. Gasabo">
+                <div class="form-field">
+                    <label for="market_name">Market name <span>(optional)</span></label>
+                    <input type="text" id="market_name" name="market_name" maxlength="120" placeholder="e.g. Kimironko" value="<?= h($marketInput) ?>">
+                </div>
 
-        <label for="recorded_on">Date recorded</label>
-        <input type="date" id="recorded_on" name="recorded_on" value="<?= h(date('Y-m-d')) ?>" required>
+                <div class="form-field">
+                    <label for="district">District <span>(optional)</span></label>
+                    <input type="text" id="district" name="district" maxlength="80" placeholder="e.g. Gasabo" value="<?= h($districtInput) ?>">
+                </div>
+            </div>
+        </section>
 
         <div class="actions">
             <button type="submit" class="btn">Save price</button>

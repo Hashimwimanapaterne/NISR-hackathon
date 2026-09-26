@@ -1,5 +1,6 @@
-#!/usr/bin/env php
 <?php
+declare(strict_types=1);
+
 /**
  * Usage: php bin/create_admin.php <username> <password>
  *
@@ -8,12 +9,15 @@
  * HTTP without its own separate authorization check.
  */
 
-declare(strict_types=1);
+if (PHP_SAPI !== 'cli') {
+    http_response_code(403);
+    exit('This script can only be run from the command line.');
+}
 
 require_once __DIR__ . '/../config/database.php';
 
 if ($argc !== 3) {
-    fwrite(STDERR, "Usage: php bin/create_admin.php <username> <password>\n");
+    fwrite(STDERR, "Usage: php bin/create_admin.php Paterne 2005\n");
     exit(1);
 }
 

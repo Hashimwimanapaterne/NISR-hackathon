@@ -22,6 +22,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 $nutrient = $_GET['nutrient'] ?? 'protein_g';
 $category = isset($_GET['category']) && $_GET['category'] !== '' ? (string) $_GET['category'] : null;
 $limit    = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
+$searchInput = $_GET['q'] ?? '';
+if (!is_string($searchInput)) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Search query must be a string.']);
+    exit;
+}
+$search = mb_substr(trim($searchInput), 0, 100);
 
 if (!array_key_exists($nutrient, ALLOWED_NUTRIENTS)) {
     http_response_code(400);
@@ -34,12 +41,14 @@ if (!array_key_exists($nutrient, ALLOWED_NUTRIENTS)) {
 
 try {
     $pdo = get_db_connection();
-    $rows = get_ranked_foods($pdo, $nutrient, $category, $limit);
+    $rows = get_ranked_foods($pdo, $nutrient, $category, $limit, $search);
 
     echo json_encode([
         'nutrient' => $nutrient,
-        'label'    => ALLOWED_NUTRIENTS[$nutrient],
+        'label'    => ALLOWED_NUTRIENTS[$nutrient]['label'],
+        'unit'     => ALLOWED_NUTRIENTS[$nutrient]['unit'],
         'category' => $category,
+        'search'   => $search,
         'count'    => count($rows),
         'results'  => $rows,
     ], JSON_PRETTY_PRINT);

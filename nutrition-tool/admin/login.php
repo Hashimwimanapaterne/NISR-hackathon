@@ -40,26 +40,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Admin login — Umurima Data</title>
+    <meta name="theme-color" content="#173d31">
+    <title>Admin sign in — Umurima Data</title>
     <link rel="stylesheet" href="../public/assets/css/style.css">
     <link rel="stylesheet" href="assets/admin.css">
 </head>
 <body class="admin-body">
 <main class="admin-auth-wrap">
-    <h1>Admin sign in</h1>
+    <a class="brand auth-brand" href="../public/index.php"><span class="brand-mark" aria-hidden="true">U</span><span>umurima<span class="brand-light">data</span></span></a>
+    <p class="auth-kicker">Market data workspace</p>
+    <h1>Welcome back</h1>
+    <p class="auth-intro">Sign in to manage food records and market prices.</p>
     <?php if ($error !== ''): ?>
-        <p class="alert-error"><?= h($error) ?></p>
+        <p class="alert-error" role="alert"><?= h($error) ?></p>
     <?php endif; ?>
-    <form method="post" novalidate>
+    <form method="post">
         <?= csrf_field() ?>
         <label for="username">Username</label>
-        <input type="text" id="username" name="username" required autofocus autocomplete="username">
+        <input type="text" id="username" name="username" required autofocus autocomplete="username" autocapitalize="none">
 
         <label for="password">Password</label>
         <input type="password" id="password" name="password" required autocomplete="current-password">
 
-        <button type="submit">Sign in</button>
+        <button type="submit">Sign in to dashboard</button>
     </form>
+    <a class="auth-back" href="../public/index.php">← Back to the nutrition finder</a>
 </main>
 </body>
 </html>

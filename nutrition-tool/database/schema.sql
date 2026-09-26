@@ -37,11 +37,21 @@ CREATE TABLE foods (
 -- ------------------------------------------------------------
 CREATE TABLE nutrient_profiles (
     food_id         INT UNSIGNED PRIMARY KEY,
-    calories_kcal   DECIMAL(7,2) NOT NULL DEFAULT 0,
-    protein_g       DECIMAL(7,2) NOT NULL DEFAULT 0,
-    iron_mg         DECIMAL(7,2) NOT NULL DEFAULT 0,
-    calcium_mg      DECIMAL(7,2) NOT NULL DEFAULT 0,
-    vitamin_a_ug    DECIMAL(7,2) NOT NULL DEFAULT 0,
+    -- Energy & macronutrients
+    calories_kcal      DECIMAL(7,2) NOT NULL DEFAULT 0,
+    protein_g          DECIMAL(7,2) NOT NULL DEFAULT 0,
+    fat_g              DECIMAL(7,2) NOT NULL DEFAULT 0,
+    carbohydrates_g    DECIMAL(7,2) NOT NULL DEFAULT 0,
+    fiber_g            DECIMAL(7,2) NOT NULL DEFAULT 0,
+    -- Vitamins & minerals most relevant to Rwanda's malnutrition/stunting priorities
+    iron_mg            DECIMAL(7,2) NOT NULL DEFAULT 0,
+    zinc_mg            DECIMAL(7,2) NOT NULL DEFAULT 0,
+    calcium_mg         DECIMAL(7,2) NOT NULL DEFAULT 0,
+    potassium_mg       DECIMAL(8,2) NOT NULL DEFAULT 0,
+    vitamin_a_ug       DECIMAL(7,2) NOT NULL DEFAULT 0,
+    vitamin_c_mg       DECIMAL(7,2) NOT NULL DEFAULT 0,
+    folate_ug          DECIMAL(7,2) NOT NULL DEFAULT 0,
+    vitamin_b12_ug     DECIMAL(7,2) NOT NULL DEFAULT 0,
     source_note     VARCHAR(255) DEFAULT NULL,
     FOREIGN KEY (food_id) REFERENCES foods(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;

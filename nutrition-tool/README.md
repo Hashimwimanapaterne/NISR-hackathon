@@ -4,9 +4,10 @@
 This is the first of the three planned modules — see the full project proposal for the complete
 picture, including the Phase 2 Crop Advisor and Phase 3 Price-Gap View.
 
-Ranks common Rwandan market foods by how much of a given nutrient (protein, iron, calcium,
-vitamin A, or calories) you get for every 100 RWF spent, using the most recent recorded price
-for each food.
+Ranks common Rwandan market foods by how much of a given nutrient — across 13 tracked
+nutrients (energy, protein, fat, carbohydrates, fiber, iron, zinc, calcium, potassium,
+vitamin A, vitamin C, folate, vitamin B12) — you get for every 100 RWF spent, using the
+most recent recorded price for each food.
 
 ## Status
 
@@ -45,16 +46,30 @@ mysql -u root -p -e "
 
 # 4. Configure environment variables (copy and edit)
 cp .env.example .env
-# then export the values, or configure them in your web server / php-fpm pool config
+# config/database.php auto-loads this .env file, so this works even on
+# hosts where you can't export real environment variables. If you deploy
+# to a provider that requires SSL (e.g. Aiven, PlanetScale), set
+# DB_SSL_ENABLED=true and DB_SSL_CA in .env — see the comments in
+# .env.example. Leave it false for local MySQL/MariaDB.
 
 # 5. Create your admin account
 php bin/create_admin.php <username> <password>
+# Re-run this any time you reload the schema from scratch — dropping
+# and recreating the database wipes admin_users along with everything else.
 
 # 6. Run locally
 php -S localhost:8000 -t .
 # Visit http://localhost:8000/public/index.php      (public tool)
 # Visit http://localhost:8000/admin/login.php        (admin panel)
 ```
+
+> **One connection file, on purpose.** `config/database.php` is the only place the app
+> opens a database connection — every page reaches it through `includes/bootstrap.php`.
+> If you're merging in a connection snippet from elsewhere (a different hosting setup, an
+> older draft, etc.), fold its logic into this one file rather than adding a second,
+> slightly different copy — two connection paths are two places to patch when credentials
+> rotate or a security fix is needed, and they tend to quietly drift apart (e.g. one
+> enforcing SSL, the other not).
 
 ## Project structure
 
@@ -68,6 +83,10 @@ api/foods.php           Read-only JSON endpoint the public page calls
 admin/                  Login-protected panel for managing foods and recording prices
 bin/create_admin.php    CLI script to create/update admin accounts (never over HTTP)
 ```
+
+To add a 14th nutrient later: add one line to `ALLOWED_NUTRIENTS` in `includes/functions.php`
+and the matching column in `database/schema.sql`. The ranking query, the admin form, and the
+public page's nutrient tabs all read from that one list — nothing else needs to change.
 
 ## Security notes
 

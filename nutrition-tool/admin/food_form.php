@@ -15,9 +15,7 @@ $errors = [];
 $food = [
     'id' => 0, 'name' => '', 'category' => '', 'unit_label' => 'kg', 'grams_per_unit' => 1000,
 ];
-$nutrients = [
-    'calories_kcal' => '', 'protein_g' => '', 'iron_mg' => '', 'calcium_mg' => '', 'vitamin_a_ug' => '',
-];
+$nutrients = array_fill_keys(array_keys(ALLOWED_NUTRIENTS), '');
 
 if ($foodId > 0) {
     $stmt = $pdo->prepare('SELECT * FROM foods WHERE id = :id');
@@ -53,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $nutrientInput = [];
     foreach (array_keys(ALLOWED_NUTRIENTS) as $col) {
         $val = (float) ($_POST[$col] ?? 0);
-        if ($val < 0) $errors[] = ALLOWED_NUTRIENTS[$col] . ' cannot be negative.';
+        if ($val < 0) $errors[] = ALLOWED_NUTRIENTS[$col]['label'] . ' cannot be negative.';
         $nutrientInput[$col] = $val;
     }
 
@@ -83,25 +81,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $foodId = (int) $pdo->lastInsertId();
             }
 
-            $stmt = $pdo->prepare('
-                INSERT INTO nutrient_profiles (food_id, calories_kcal, protein_g, iron_mg, calcium_mg, vitamin_a_ug, source_note)
-                VALUES (:id, :cal, :pro, :iron, :calcium, :vita, :note)
-                ON DUPLICATE KEY UPDATE
-                    calories_kcal = VALUES(calories_kcal),
-                    protein_g     = VALUES(protein_g),
-                    iron_mg       = VALUES(iron_mg),
-                    calcium_mg    = VALUES(calcium_mg),
-                    vitamin_a_ug  = VALUES(vitamin_a_ug)
-            ');
-            $stmt->execute([
-                ':id' => $foodId,
-                ':cal' => $nutrientInput['calories_kcal'],
-                ':pro' => $nutrientInput['protein_g'],
-                ':iron' => $nutrientInput['iron_mg'],
-                ':calcium' => $nutrientInput['calcium_mg'],
-                ':vita' => $nutrientInput['vitamin_a_ug'],
-                ':note' => 'Entered via admin panel',
-            ]);
+            // Built dynamically from ALLOWED_NUTRIENTS so adding a new
+            // nutrient later only means adding one line in functions.php —
+            // this SQL never needs to change again.
+            $nutrientCols = array_keys(ALLOWED_NUTRIENTS);
+            $setClause    = implode(', ', array_map(fn($c) => "{$c} = VALUES({$c})", $nutrientCols));
+            $insertCols   = implode(', ', $nutrientCols);
+            $placeholders = implode(', ', array_map(fn($c) => ":{$c}", $nutrientCols));
+
+            $stmt = $pdo->prepare("
+                INSERT INTO nutrient_profiles (food_id, {$insertCols}, source_note)
+                VALUES (:food_id, {$placeholders}, :note)
+                ON DUPLICATE KEY UPDATE {$setClause}
+            ");
+            $bindings = [':food_id' => $foodId, ':note' => 'Entered via admin panel'];
+            foreach ($nutrientCols as $col) {
+                $bindings[":{$col}"] = $nutrientInput[$col];
+            }
+            $stmt->execute($bindings);
 
             $pdo->commit();
             header('Location: index.php?msg=' . urlencode('Food saved.'));
@@ -123,52 +120,89 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $foodId > 0 ? 'Edit food' : 'Add food' ?> — Admin</title>
+    <meta name="theme-color" content="#173d31">
+    <title><?= $foodId > 0 ? 'Edit food' : 'Add food' ?> — Umurima Data admin</title>
     <link rel="stylesheet" href="../public/assets/css/style.css">
     <link rel="stylesheet" href="assets/admin.css">
 </head>
 <body class="admin-body">
 
-<nav class="admin-nav">
-    <a href="index.php">Foods</a>
-    <a href="food_form.php">Add food</a>
-    <span class="spacer"></span>
-    <a href="logout.php">Sign out</a>
+<nav class="admin-nav" aria-label="Admin navigation">
+    <div class="admin-nav-inner">
+        <a class="brand" href="index.php"><span class="brand-mark" aria-hidden="true">U</span><span>umurima<span class="brand-light">data</span></span></a>
+        <div class="admin-links">
+            <a href="index.php">Foods &amp; prices</a>
+            <a href="food_form.php" aria-current="page">Add food</a>
+        </div>
+        <span class="spacer"></span>
+        <span class="admin-identity">Signed in as <?= h($_SESSION['admin_username'] ?? '') ?></span>
+        <a class="public-link" href="../public/index.php">View public tool ↗</a>
+        <a href="logout.php">Sign out</a>
+    </div>
 </nav>
 
 <main class="wrap">
-    <h1><?= $foodId > 0 ? 'Edit food' : 'Add a food' ?></h1>
+    <div class="admin-page-heading">
+        <div>
+            <p class="section-kicker">Food catalog</p>
+            <h1><?= $foodId > 0 ? 'Edit food' : 'Add a food' ?></h1>
+            <p>Enter food details and nutrition values per 100g edible portion.</p>
+        </div>
+    </div>
 
     <?php foreach ($errors as $err): ?>
-        <p class="alert-error"><?= h($err) ?></p>
+        <p class="alert-error" role="alert"><?= h($err) ?></p>
     <?php endforeach; ?>
 
-    <form method="post" class="admin-form" novalidate>
+    <form method="post" class="admin-form">
         <?= csrf_field() ?>
         <input type="hidden" name="id" value="<?= (int) $food['id'] ?>">
 
-        <label for="name">Food name</label>
-        <input type="text" id="name" name="name" required value="<?= h($food['name']) ?>">
+        <section class="form-panel" aria-labelledby="food-details-title">
+            <h2 id="food-details-title">Food details</h2>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label for="name">Food name</label>
+                    <input type="text" id="name" name="name" required maxlength="120" value="<?= h($food['name']) ?>" placeholder="e.g. Red kidney beans">
+                </div>
 
-        <label for="category">Category</label>
-        <input type="text" id="category" name="category" required value="<?= h($food['category']) ?>" placeholder="e.g. Grains, Legumes, Vegetables">
+                <div class="form-field">
+                    <label for="category">Category</label>
+                    <input type="text" id="category" name="category" required maxlength="60" value="<?= h($food['category']) ?>" placeholder="e.g. Grains, Legumes, Vegetables">
+                </div>
 
-        <label for="unit_label">Price unit label</label>
-        <input type="text" id="unit_label" name="unit_label" required value="<?= h($food['unit_label']) ?>" placeholder="kg, litre, piece, tray(30)">
+                <div class="form-field">
+                    <label for="unit_label">Price unit label</label>
+                    <input type="text" id="unit_label" name="unit_label" required maxlength="30" value="<?= h($food['unit_label']) ?>" placeholder="kg, litre, piece, tray">
+                </div>
 
-        <label for="grams_per_unit">Grams represented by one unit</label>
-        <input type="number" step="0.01" id="grams_per_unit" name="grams_per_unit" required value="<?= h((string) $food['grams_per_unit']) ?>">
+                <div class="form-field">
+                    <label for="grams_per_unit">Grams in one unit</label>
+                    <input type="number" step="0.01" min="0.01" id="grams_per_unit" name="grams_per_unit" required value="<?= h((string) $food['grams_per_unit']) ?>">
+                </div>
+            </div>
+        </section>
 
-        <h2 style="font-family: var(--font-display); font-size: 1.2rem; margin-top: 1.5rem;">Nutrients (per 100g edible portion)</h2>
-
-        <?php foreach (ALLOWED_NUTRIENTS as $col => $label): ?>
-            <label for="<?= h($col) ?>"><?= h($label) ?></label>
-            <input type="number" step="0.01" min="0" id="<?= h($col) ?>" name="<?= h($col) ?>"
-                   value="<?= h((string) ($nutrients[$col] ?? '')) ?>">
+        <?php foreach (get_nutrient_groups() as $groupName => $cols): ?>
+            <section class="form-panel" aria-labelledby="nutrient-<?= h(str_replace(' ', '-', strtolower($groupName))) ?>">
+                <h2 id="nutrient-<?= h(str_replace(' ', '-', strtolower($groupName))) ?>">
+                    <?= h($groupName) ?>
+                    <span>Nutrition values per 100g edible portion</span>
+                </h2>
+                <div class="nutrient-grid">
+                    <?php foreach ($cols as $col => $meta): ?>
+                        <div class="form-field">
+                            <label for="<?= h($col) ?>"><?= h($meta['label']) ?> (<?= h($meta['unit']) ?>)</label>
+                            <input type="number" step="0.01" min="0" id="<?= h($col) ?>" name="<?= h($col) ?>"
+                                   value="<?= h((string) ($nutrients[$col] ?? '')) ?>">
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </section>
         <?php endforeach; ?>
 
         <div class="actions">
-            <button type="submit" class="btn">Save food</button>
+            <button type="submit" class="btn"><?= $foodId > 0 ? 'Save changes' : 'Save food' ?></button>
             <a href="index.php" class="btn btn-secondary">Cancel</a>
         </div>
     </form>

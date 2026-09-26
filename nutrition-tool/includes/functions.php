@@ -6,14 +6,34 @@
 declare(strict_types=1);
 
 // Whitelist of nutrients users may rank by. Never build SQL from
-// raw user input — always map through this list first.
+// raw user input — always map through this list first. Adding a
+// nutrient later means adding one line here plus the matching
+// column in nutrient_profiles — every other file reads this list.
 const ALLOWED_NUTRIENTS = [
-    'calories_kcal' => 'Calories',
-    'protein_g'     => 'Protein',
-    'iron_mg'       => 'Iron',
-    'calcium_mg'    => 'Calcium',
-    'vitamin_a_ug'  => 'Vitamin A',
+    'calories_kcal'   => ['label' => 'Calories',      'unit' => 'kcal', 'group' => 'Energy & macros'],
+    'protein_g'       => ['label' => 'Protein',       'unit' => 'g',    'group' => 'Energy & macros'],
+    'fat_g'           => ['label' => 'Fat',           'unit' => 'g',    'group' => 'Energy & macros'],
+    'carbohydrates_g' => ['label' => 'Carbohydrates', 'unit' => 'g',    'group' => 'Energy & macros'],
+    'fiber_g'         => ['label' => 'Fiber',         'unit' => 'g',    'group' => 'Energy & macros'],
+    'iron_mg'         => ['label' => 'Iron',          'unit' => 'mg',   'group' => 'Vitamins & minerals'],
+    'zinc_mg'         => ['label' => 'Zinc',          'unit' => 'mg',   'group' => 'Vitamins & minerals'],
+    'calcium_mg'      => ['label' => 'Calcium',       'unit' => 'mg',   'group' => 'Vitamins & minerals'],
+    'potassium_mg'    => ['label' => 'Potassium',     'unit' => 'mg',   'group' => 'Vitamins & minerals'],
+    'vitamin_a_ug'    => ['label' => 'Vitamin A',     'unit' => 'µg',   'group' => 'Vitamins & minerals'],
+    'vitamin_c_mg'    => ['label' => 'Vitamin C',     'unit' => 'mg',   'group' => 'Vitamins & minerals'],
+    'folate_ug'       => ['label' => 'Folate',        'unit' => 'µg',   'group' => 'Vitamins & minerals'],
+    'vitamin_b12_ug'  => ['label' => 'Vitamin B12',   'unit' => 'µg',   'group' => 'Vitamins & minerals'],
 ];
+
+/** Group nutrient columns by their display group, preserving declared order. */
+function get_nutrient_groups(): array
+{
+    $groups = [];
+    foreach (ALLOWED_NUTRIENTS as $col => $meta) {
+        $groups[$meta['group']][$col] = $meta;
+    }
+    return $groups;
+}
 
 /**
  * Rank foods by how much of a given nutrient you get per 100 RWF spent.
@@ -21,10 +41,11 @@ const ALLOWED_NUTRIENTS = [
  * @param PDO         $pdo
  * @param string      $nutrientColumn  Must be a key of ALLOWED_NUTRIENTS.
  * @param string|null $category        Optional exact-match category filter.
+ * @param string      $search          Optional partial food-name match.
  * @param int         $limit           Max rows to return (1-100).
  * @return array<int, array<string, mixed>>
  */
-function get_ranked_foods(PDO $pdo, string $nutrientColumn, ?string $category, int $limit = 20): array
+function get_ranked_foods(PDO $pdo, string $nutrientColumn, ?string $category, int $limit = 20, string $search = ''): array
 {
     if (!array_key_exists($nutrientColumn, ALLOWED_NUTRIENTS)) {
         throw new InvalidArgumentException('Unsupported nutrient column.');
@@ -61,6 +82,10 @@ function get_ranked_foods(PDO $pdo, string $nutrientColumn, ?string $category, i
     if ($category !== null && $category !== '') {
         $sql .= ' AND f.category = :category';
         $params[':category'] = $category;
+    }
+    if ($search !== '') {
+        $sql .= " AND f.name LIKE :search ESCAPE '!'";
+        $params[':search'] = '%' . strtr($search, ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
     }
 
     $sql .= ' ORDER BY nutrient_per_100rwf DESC LIMIT :limit';
