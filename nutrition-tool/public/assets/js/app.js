@@ -15,7 +15,29 @@
     const nutrientHeadLabel = document.getElementById('nutrient-head-label');
     const resultsCount = document.getElementById('results-count');
     const statusDot = document.querySelector('.status-dot');
+    const mealFoodSelect = document.getElementById('meal-food-select');
+    const addMealFoodButton = document.getElementById('add-meal-food');
+    const mealStatus = document.getElementById('meal-status');
+    const mealItems = document.getElementById('meal-items');
+    const mealNutrition = document.getElementById('meal-nutrition');
     const apiUrl = new URL('../api/foods.php', window.location.href);
+    const mealApiUrl = new URL('../api/food_nutrition.php', window.location.href);
+    const dailyValues = {
+        calories_kcal: 2000,
+        protein_g: 50,
+        fat_g: 78,
+        carbohydrates_g: 275,
+        fiber_g: 28,
+        iron_mg: 18,
+        zinc_mg: 11,
+        calcium_mg: 1300,
+        potassium_mg: 4700,
+        vitamin_a_ug: 900,
+        vitamin_c_mg: 90,
+        folate_ug: 400,
+        vitamin_b12_ug: 2.4,
+    };
+    const meal = { foods: [], nutrients: [], portions: new Map() };
     let requestNumber = 0;
     let searchTimer;
 
@@ -32,6 +54,94 @@
             minimumFractionDigits: decimals,
             maximumFractionDigits: decimals,
         });
+    }
+
+    async function loadMealFoods() {
+        try {
+            const response = await fetch(mealApiUrl.toString(), {
+                headers: { Accept: 'application/json' },
+            });
+            if (!response.ok) throw new Error('Meal food request failed with status ' + response.status);
+            const data = await response.json();
+            if (!Array.isArray(data.foods) || !Array.isArray(data.nutrients)) {
+                throw new Error('Meal food response has an invalid format');
+            }
+
+            meal.foods = data.foods;
+            meal.nutrients = data.nutrients;
+            if (meal.foods.length === 0) {
+                mealFoodSelect.innerHTML = '<option value="">No foods available</option>';
+                mealStatus.textContent = 'No food nutrition profiles are available yet.';
+                return;
+            }
+
+            mealFoodSelect.innerHTML = '<option value="">Choose a food…</option>' +
+                meal.foods.map((food) =>
+                    '<option value="' + Number(food.id) + '">' +
+                    escapeHtml(food.name) + ' — ' + escapeHtml(food.category) +
+                    '</option>'
+                ).join('');
+            mealFoodSelect.disabled = false;
+            addMealFoodButton.disabled = false;
+            mealStatus.textContent = 'Choose a food to add. Default portions are 100 g and can be adjusted.';
+        } catch (error) {
+            mealFoodSelect.innerHTML = '<option value="">Food data unavailable</option>';
+            mealStatus.textContent = 'Could not load food nutrition data. Please refresh to try again.';
+            console.error(error);
+        }
+    }
+
+    function renderMeal() {
+        const selectedFoods = meal.foods.filter((food) => meal.portions.has(Number(food.id)));
+        Array.from(mealFoodSelect.options).forEach((option) => {
+            if (option.value) option.disabled = meal.portions.has(Number(option.value));
+        });
+        mealItems.innerHTML = selectedFoods.map((food) => {
+            const foodId = Number(food.id);
+            return (
+                '<div class="meal-item" data-food-id="' + foodId + '">' +
+                '<div class="meal-item-name"><strong>' + escapeHtml(food.name) + '</strong>' +
+                '<span>' + escapeHtml(food.category) + '</span></div>' +
+                '<label>Portion <span class="sr-only">for ' + escapeHtml(food.name) + '</span>' +
+                '<input type="number" class="meal-portion" min="1" max="10000" step="1" inputmode="numeric" value="' + meal.portions.get(foodId) + '">' +
+                '<span>g</span></label>' +
+                '<button type="button" class="remove-food-button" data-remove-food="' + foodId + '" aria-label="Remove ' + escapeHtml(food.name) + '">Remove</button>' +
+                '</div>'
+            );
+        }).join('');
+        renderMealNutrition(selectedFoods);
+    }
+
+    function renderMealNutrition(selectedFoods) {
+        if (selectedFoods.length === 0) {
+            mealNutrition.innerHTML = '<p class="meal-empty">Add foods above to see their combined nutrient values.</p>';
+            return;
+        }
+
+        mealNutrition.innerHTML =
+            '<h3>Combined nutrition</h3>' +
+            '<p class="meal-total-note">Total for ' + selectedFoods.length + (selectedFoods.length === 1 ? ' food' : ' foods') + ' in the selected portions</p>' +
+            '<div class="daily-value-grid">' +
+            meal.nutrients.map((nutrient) => {
+                const amount = selectedFoods.reduce((sum, food) => {
+                    return sum + Number(food.nutrients[nutrient.key] || 0) *
+                        (meal.portions.get(Number(food.id)) / 100);
+                }, 0);
+                const dailyValue = dailyValues[nutrient.key];
+                if (!dailyValue) return '';
+                const percent = amount / dailyValue * 100;
+                const decimals = nutrient.unit === 'kcal' ? 0 : 1;
+                return (
+                    '<article class="daily-value-card">' +
+                    '<div class="daily-value-card-top"><h4>' + escapeHtml(nutrient.label) + '</h4>' +
+                    '<span>' + formatNumber(amount, decimals) + ' ' + escapeHtml(nutrient.unit) + '</span></div>' +
+                    '<div class="daily-value-track" role="progressbar" aria-label="' + escapeHtml(nutrient.label) + ' daily value" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + Math.min(100, percent).toFixed(0) + '">' +
+                    '<span style="width:' + Math.min(100, Math.max(0, percent)).toFixed(1) + '%"></span></div>' +
+                    '<p>' + formatNumber(percent, 0) + '% of ' + formatNumber(dailyValue, dailyValue < 10 ? 1 : 0) + ' ' + escapeHtml(nutrient.unit) + ' daily value</p>' +
+                    '</article>'
+                );
+            }).join('') +
+            '</div>';
     }
 
     function setStatus(message, status) {
@@ -165,5 +275,39 @@
         setActiveNutrient('protein_g');
     });
 
+    addMealFoodButton.addEventListener('click', () => {
+        const foodId = Number(mealFoodSelect.value);
+        if (!foodId || meal.portions.has(foodId)) return;
+        meal.portions.set(foodId, 100);
+        mealFoodSelect.value = '';
+        renderMeal();
+    });
+
+    mealItems.addEventListener('input', (event) => {
+        if (!event.target.matches('.meal-portion')) return;
+        const foodId = Number(event.target.closest('[data-food-id]').dataset.foodId);
+        const portion = Number(event.target.value);
+        if (!Number.isFinite(portion) || portion <= 0 || portion > 10000) return;
+        meal.portions.set(foodId, portion);
+        renderMealNutrition(meal.foods.filter((food) => meal.portions.has(Number(food.id))));
+    });
+
+    mealItems.addEventListener('change', (event) => {
+        if (!event.target.matches('.meal-portion')) return;
+        const foodId = Number(event.target.closest('[data-food-id]').dataset.foodId);
+        const portion = Number(event.target.value);
+        if (!Number.isFinite(portion) || portion <= 0 || portion > 10000) {
+            event.target.value = meal.portions.get(foodId);
+        }
+    });
+
+    mealItems.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-remove-food]');
+        if (!button) return;
+        meal.portions.delete(Number(button.dataset.removeFood));
+        renderMeal();
+    });
+
     loadResults();
+    loadMealFoods();
 })();

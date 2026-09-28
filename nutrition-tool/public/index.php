@@ -26,6 +26,7 @@ $nutrientGroups = get_nutrient_groups();
             <span class="brand-mark" aria-hidden="true">U</span>
             <span>umurima<span class="brand-light">data</span></span>
         </a>
+        <a class="nav-link" href="crop_advisor.php">Crop Advisor <span aria-hidden="true">↗</span></a>
         <a class="nav-link" href="../admin/login.php">Admin sign in <span aria-hidden="true">↗</span></a>
     </nav>
     <div class="hero wrap">
@@ -121,6 +122,29 @@ $nutrientGroups = get_nutrient_groups();
             <p><strong>How to read this:</strong> Foods are compared by the amount of the selected nutrient you get for 100 RWF. Cost per 100g helps compare foods sold in different units. Nutrition values are per 100g edible portion.</p>
         </aside>
     </section>
+
+    <section class="meal-planner" aria-labelledby="meal-planner-title">
+        <div class="meal-planner-heading">
+            <div>
+                <p class="section-kicker">Combine foods</p>
+                <h2 id="meal-planner-title">Build a meal and check its nutrition</h2>
+                <p class="section-copy">Add foods, adjust each portion, and compare the combined nutrients with general adult daily values.</p>
+            </div>
+            <div class="meal-add-controls">
+                <label class="sr-only" for="meal-food-select">Choose food to add</label>
+                <select id="meal-food-select" disabled>
+                    <option value="">Loading foods…</option>
+                </select>
+                <button class="add-food-button" id="add-meal-food" type="button" disabled>Add food</button>
+            </div>
+        </div>
+        <p class="meal-status" id="meal-status" role="status" aria-live="polite">Loading nutrition profiles…</p>
+        <div id="meal-items" class="meal-items"></div>
+        <div id="meal-nutrition" class="meal-nutrition" aria-live="polite">
+            <p class="meal-empty">Add foods above to see their combined nutrient values.</p>
+        </div>
+        <p class="daily-value-note">Daily comparisons use general adult FDA Daily Values for reference, not personalized recommendations. Food values are approximate per 100 g edible portion; actual nutrition and individual needs vary.</p>
+    </section>
 </main>
 
 <footer class="site-footer">
@@ -131,6 +155,6 @@ $nutrientGroups = get_nutrient_groups();
     </div>
 </footer>
 
-<script src="assets/js/app.js"></script>
+<script src="assets/js/app.js?v=meal-planner-1"></script>
 </body>
 </html>

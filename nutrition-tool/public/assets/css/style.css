@@ -441,6 +441,204 @@ table.ledger tbody tr:hover { background: #f8faf5; }
 .method-note p { margin: 0; color: #6a776e; font-size: 11px; line-height: 1.65; }
 .method-note strong { color: #45564a; }
 
+.meal-planner {
+    margin-top: 28px;
+    padding: 30px 34px;
+    border: 1px solid #e8e9df;
+    border-top: 3px solid var(--color-accent);
+    border-radius: 16px;
+    background: var(--color-surface);
+    box-shadow: 0 18px 54px rgba(36, 58, 44, .045);
+}
+
+.meal-planner-heading {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+}
+
+.meal-planner-heading h2,
+.meal-nutrition h3 {
+    margin: 0;
+    color: var(--color-ink);
+    font-family: var(--font-display);
+    font-size: clamp(1.45rem, 2.7vw, 1.9rem);
+    font-weight: 500;
+    letter-spacing: -.04em;
+    line-height: 1.2;
+}
+
+.meal-planner-heading .section-copy {
+    max-width: 560px;
+}
+
+.meal-add-controls {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+}
+
+.meal-add-controls select,
+.meal-portion {
+    min-height: 40px;
+    padding: 8px 10px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--color-ink);
+    font: 13px var(--font-body);
+}
+
+.meal-add-controls select {
+    max-width: 245px;
+}
+
+.add-food-button {
+    min-height: 40px;
+    padding: 8px 14px;
+    border: 1px solid var(--color-primary);
+    border-radius: 8px;
+    background: var(--color-primary);
+    color: #fff;
+    font: 600 12px var(--font-body);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.add-food-button:hover:not(:disabled) { background: var(--color-primary-dk); }
+.add-food-button:disabled { cursor: not-allowed; opacity: .55; }
+
+.meal-status {
+    margin: 17px 0 0;
+    color: var(--color-muted);
+    font-size: 12px;
+}
+
+.meal-items {
+    display: grid;
+    margin-top: 6px;
+}
+
+.meal-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 16px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.meal-item-name strong,
+.meal-item-name span { display: block; }
+
+.meal-item-name strong { color: var(--color-ink); font-size: 13px; }
+.meal-item-name span { color: var(--color-muted); font-size: 11px; }
+
+.meal-item label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--color-muted);
+    font-size: 11px;
+}
+
+.meal-portion { width: 76px; min-height: 35px; }
+.portion-unit { color: var(--color-ink); }
+
+.remove-food-button {
+    padding: 7px;
+    border: 0;
+    background: transparent;
+    color: var(--color-danger);
+    font: 600 11px var(--font-body);
+    cursor: pointer;
+}
+
+.meal-nutrition { margin-top: 24px; }
+.meal-nutrition h3 { font-size: 1.35rem; }
+
+.meal-total-note {
+    margin: 4px 0 14px;
+    color: var(--color-muted);
+    font-size: 11px;
+}
+
+.daily-value-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 9px;
+}
+
+.daily-value-card {
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    background: #fff;
+}
+
+.daily-value-card-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.daily-value-card h4 {
+    margin: 0;
+    color: var(--color-ink);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.daily-value-card-top > span {
+    color: var(--color-primary-dk);
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.daily-value-track {
+    height: 6px;
+    margin-top: 10px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #edf0e9;
+}
+
+.daily-value-track span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--color-primary);
+}
+
+.daily-value-card p {
+    margin: 5px 0 0;
+    color: var(--color-muted);
+    font-size: 10px;
+}
+
+.meal-empty {
+    margin: 0;
+    padding: 22px 14px;
+    border: 1px dashed var(--color-border);
+    border-radius: 9px;
+    color: var(--color-muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+.daily-value-note {
+    margin: 18px 0 0;
+    color: var(--color-muted);
+    font-size: 10px;
+    line-height: 1.6;
+}
+
 .site-footer { padding: 25px 0; border-top: 1px solid #e7e9e0; }
 .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .footer-brand { color: var(--color-primary-dk); font-size: 14px; }
@@ -471,6 +669,10 @@ table.ledger tbody tr:hover { background: #f8faf5; }
     .table-shell { margin-inline: 12px; overflow-x: auto; }
     table.ledger { min-width: 650px; }
     .method-note { margin-inline: 12px; }
+    .meal-planner { padding: 24px 22px; }
+    .meal-planner-heading { align-items: flex-start; flex-direction: column; gap: 13px; }
+    .meal-add-controls { width: 100%; }
+    .meal-add-controls select { min-width: 0; flex: 1; }
 }
 
 @media (max-width: 560px) {
@@ -564,6 +766,13 @@ table.ledger tbody tr:hover { background: #f8faf5; }
     .food-name { font-size: 12px; }
     .nutrient-value { font-size: 13px !important; }
     .method-note { margin: 14px 8px 10px; padding: 12px; }
+    .meal-planner { margin-top: 18px; padding: 20px 16px; border-radius: 14px; }
+    .meal-add-controls { align-items: stretch; }
+    .meal-add-controls select { max-width: none; }
+    .meal-item { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+    .meal-item label { grid-column: 1; grid-row: 2; }
+    .remove-food-button { grid-column: 2; grid-row: 1 / span 2; }
+    .daily-value-grid { grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); }
     .footer-inner { align-items: flex-start; flex-wrap: wrap; }
     .site-footer p { order: 3; width: 100%; text-align: left; }
     .site-footer > .footer-inner > a:last-child { margin-left: auto; align-self: center; }

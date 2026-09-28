@@ -13,6 +13,20 @@
 
 USE umurima_nutrition;
 
+INSERT INTO districts (name, province) VALUES
+('Nyarugenge', 'Kigali City'), ('Gasabo', 'Kigali City'), ('Kicukiro', 'Kigali City'),
+('Nyanza', 'Southern'), ('Gisagara', 'Southern'), ('Nyaruguru', 'Southern'),
+('Huye', 'Southern'), ('Nyamagabe', 'Southern'), ('Ruhango', 'Southern'),
+('Muhanga', 'Southern'), ('Kamonyi', 'Southern'),
+('Karongi', 'Western'), ('Rutsiro', 'Western'), ('Rubavu', 'Western'),
+('Nyabihu', 'Western'), ('Ngororero', 'Western'), ('Rusizi', 'Western'),
+('Nyamasheke', 'Western'),
+('Rulindo', 'Northern'), ('Gakenke', 'Northern'), ('Musanze', 'Northern'),
+('Burera', 'Northern'), ('Gicumbi', 'Northern'),
+('Rwamagana', 'Eastern'), ('Nyagatare', 'Eastern'), ('Gatsibo', 'Eastern'),
+('Kayonza', 'Eastern'), ('Kirehe', 'Eastern'), ('Ngoma', 'Eastern'),
+('Bugesera', 'Eastern');
+
 INSERT INTO foods (name, category, unit_label, grams_per_unit) VALUES
 ('White rice',              'Grains',          'kg',       1000),
 ('Maize flour',             'Grains',          'kg',       1000),
@@ -85,6 +99,108 @@ JOIN (
     UNION ALL SELECT 'Cooking oil', 884, 0, 100.0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     UNION ALL SELECT 'Sugar', 387, 0, 0, 100.0, 0, 0, 0, 1, 2, 0, 0, 0, 0
 ) v ON v.name = f.name;
+
+-- Crop yields and initial suitability are deliberately illustrative.
+-- Replace yield estimates and neutral suitability scores with validated
+-- RAB/local data or documented SoilGrids-derived assessments.
+INSERT INTO crops (name, food_id, typical_yield_kg_per_hectare, notes)
+SELECT v.crop_name, f.id, v.yield_kg_per_hectare, v.notes
+FROM (
+    SELECT 'Potato' AS crop_name, 'Irish potatoes' AS food_name, 8000 AS yield_kg_per_hectare,
+           'Illustrative planning yield, verify with RAB/local data.' AS notes
+    UNION ALL SELECT 'Rice', 'White rice', 5000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Maize', 'Maize flour', 2000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Cassava', 'Cassava (fresh)', 12000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Sorghum', 'Sorghum flour', 1500, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Common beans', 'Dry beans (mixed)', 1000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Soybean', 'Soybeans', 1500, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Sweet potato', 'Sweet potatoes', 8000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Avocado', 'Avocado', 8000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Cabbage', 'Cabbage', 25000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Carrot', 'Carrots', 18000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Amaranth (dodo)', 'Dodo (amaranth greens)', 10000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Plantain (matoke)', 'Green bananas (matoke)', 12000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Groundnut', 'Groundnuts (shelled)', 1500, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Onion', 'Onions', 15000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Banana', 'Ripe bananas', 12000, 'Illustrative planning yield, verify with RAB/local data.'
+    UNION ALL SELECT 'Tomato', 'Tomatoes', 20000, 'Illustrative planning yield, verify with RAB/local data.'
+) AS v
+INNER JOIN foods f ON f.name = v.food_name;
+
+UPDATE crops
+SET
+    rotation_guidance = CASE name
+        WHEN 'Potato' THEN 'Potato → beans/soybean/groundnut → maize or sorghum → potato. Avoid consecutive potato, tomato, or other nightshades.'
+        WHEN 'Rice' THEN 'Rice → legume during a suitable drained phase → cereal or cover crop → rice. Avoid continuous rice monoculture.'
+        WHEN 'Maize' THEN 'Maize → beans, soybean, or groundnut → root crop or cover crop → maize. Avoid repeated cereal cropping.'
+        WHEN 'Cassava' THEN 'Cassava → legume → cereal or cover crop → cassava. Keep soil covered during establishment and after harvest.'
+        WHEN 'Sorghum' THEN 'Sorghum → legume → root crop or cover crop → sorghum. Retain safe residues and avoid repeated cereals.'
+        WHEN 'Common beans' THEN 'Beans → maize or sorghum → root crop or cover crop → beans. Avoid consecutive legumes where disease pressure is high.'
+        WHEN 'Soybean' THEN 'Soybean → maize or sorghum → root crop or cover crop → soybean. Avoid consecutive legumes where disease pressure is high.'
+        WHEN 'Sweet potato' THEN 'Sweet potato → cereal or legume → leafy cover crop → sweet potato. Avoid consecutive root crops.'
+        WHEN 'Avocado' THEN 'In young orchards, use locally suitable legume or grass cover between rows; maintain a living understory rather than rotating established trees.'
+        WHEN 'Cabbage' THEN 'Cabbage → legume → cereal or root crop → cabbage. Avoid consecutive cabbage or other brassicas.'
+        WHEN 'Carrot' THEN 'Carrot → cereal or legume → leafy cover crop → carrot. Avoid consecutive carrot or related umbelliferous crops.'
+        WHEN 'Amaranth (dodo)' THEN 'Amaranth → legume → cereal or root crop → amaranth. Avoid repeated leafy crops that remove nutrients.'
+        WHEN 'Plantain (matoke)' THEN 'In established plantain, keep a suitable legume/grass understory and rotate cover species; do not disturb perennial mats for an annual rotation.'
+        WHEN 'Groundnut' THEN 'Groundnut → maize or sorghum → root crop or cover crop → groundnut. Avoid continuous legumes and return safe residues.'
+        WHEN 'Onion' THEN 'Onion → legume or cereal → root or leafy crop → onion. Avoid consecutive onion or other alliums.'
+        WHEN 'Banana' THEN 'In established banana, maintain a suitable legume/grass understory and rotate cover species; do not disturb perennial mats for an annual rotation.'
+        WHEN 'Tomato' THEN 'Tomato → legume or cereal → root crop or cover crop → tomato. Avoid consecutive tomato, potato, or other nightshades.'
+    END,
+    soil_stewardship_guidance = CASE name
+        WHEN 'Potato' THEN 'Bare ridges can erode on slopes. Use contour-aligned ridges, mulch/cover crops, safe residue return, and soil-test-led fertility; avoid excessive tillage.'
+        WHEN 'Rice' THEN 'Good bunds slow runoff, but damaged bunds and poor water control can cause erosion. Continuous flooding/puddling may harm structure; manage water and residues carefully.'
+        WHEN 'Maize' THEN 'Rows may leave soil exposed and grain harvest removes nutrients. Retain safe residues, use cover crops and contour practices on slopes, and rotate with legumes.'
+        WHEN 'Cassava' THEN 'Slow canopy establishment and long field occupancy can expose or exhaust soil. Intercrop/cover early, contour-plant on slopes, return residues, and rotate with legumes.'
+        WHEN 'Sorghum' THEN 'A vigorous canopy and roots can protect soil, but removing all stalks reduces cover and organic matter. Retain safe residues and rotate with legumes.'
+        WHEN 'Common beans' THEN 'Legumes can add nitrogen when well nodulated, but harvested grain and removed haulms export nutrients. Return safe residues and maintain soil cover.'
+        WHEN 'Soybean' THEN 'Legumes can add nitrogen when well nodulated, but harvested grain and removed residues export nutrients. Return safe residues and rotate with cereals.'
+        WHEN 'Sweet potato' THEN 'Spreading vines can cover soil after establishment; root harvest disturbs soil and removes nutrients. Maintain contour cover and rotate with cereals or legumes.'
+        WHEN 'Avocado' THEN 'Perennial canopy and roots may reduce erosion if the orchard floor stays covered. Maintain understory and mulch; trees still remove nutrients and need balanced replenishment.'
+        WHEN 'Cabbage' THEN 'Open beds can erode and leafy harvests remove nutrients. Mulch, use contour beds, replace nutrients based on soil tests, and rotate away from brassicas.'
+        WHEN 'Carrot' THEN 'Fine seedbeds and root harvest can leave soil exposed and disturb structure. Mulch between rows, avoid over-tillage, and replenish exported nutrients.'
+        WHEN 'Amaranth (dodo)' THEN 'Dense leafy growth can cover soil, but repeated leaf harvest can remove nutrients. Retain roots/residues where safe and rotate with legumes.'
+        WHEN 'Plantain (matoke)' THEN 'Perennial canopy and mulch from leaves can protect soil; keep an understory to prevent bare ground and replenish nutrients removed in fruit.'
+        WHEN 'Groundnut' THEN 'Legumes can add nitrogen when well nodulated, but pod lifting disturbs soil and residue removal exports nutrients. Harvest carefully and retain safe haulms.'
+        WHEN 'Onion' THEN 'Sparse early canopy leaves soil exposed and bulbs remove nutrients. Mulch, use suitable intercrops/cover, limit tillage, and rotate away from alliums.'
+        WHEN 'Banana' THEN 'Perennial canopy and returned leaves can reduce erosion and build organic matter. Keep a living understory; replenish nutrients exported in fruit.'
+        WHEN 'Tomato' THEN 'Open rows and heavy fruit removal can expose and deplete soil. Mulch, stake to improve cover, use contour practices, and rotate away from nightshades.'
+    END;
+
+INSERT INTO agro_suitability (
+    district_id, crop_id, soil_score, climate_score, erosion_risk,
+    fertilizer_note, source, source_reference, erosion_control_score,
+    nutrient_balance_score, soil_structure_score
+)
+SELECT
+    d.id, c.id, 50, 50, 'medium',
+    'Neutral placeholder scores only, replace with district-specific agronomic data.',
+    'illustrative_estimate',
+    NULL,
+    CASE c.name
+        WHEN 'Potato' THEN 30 WHEN 'Rice' THEN 65 WHEN 'Maize' THEN 35 WHEN 'Cassava' THEN 40
+        WHEN 'Sorghum' THEN 60 WHEN 'Common beans' THEN 50 WHEN 'Soybean' THEN 45 WHEN 'Sweet potato' THEN 55
+        WHEN 'Avocado' THEN 60 WHEN 'Cabbage' THEN 35 WHEN 'Carrot' THEN 40 WHEN 'Amaranth (dodo)' THEN 60
+        WHEN 'Plantain (matoke)' THEN 70 WHEN 'Groundnut' THEN 50 WHEN 'Onion' THEN 25
+        WHEN 'Banana' THEN 65 WHEN 'Tomato' THEN 30 ELSE 50
+    END,
+    CASE c.name
+        WHEN 'Potato' THEN 35 WHEN 'Rice' THEN 40 WHEN 'Maize' THEN 35 WHEN 'Cassava' THEN 35
+        WHEN 'Sorghum' THEN 40 WHEN 'Common beans' THEN 75 WHEN 'Soybean' THEN 75 WHEN 'Sweet potato' THEN 40
+        WHEN 'Avocado' THEN 50 WHEN 'Cabbage' THEN 35 WHEN 'Carrot' THEN 35 WHEN 'Amaranth (dodo)' THEN 55
+        WHEN 'Plantain (matoke)' THEN 50 WHEN 'Groundnut' THEN 75 WHEN 'Onion' THEN 30
+        WHEN 'Banana' THEN 50 WHEN 'Tomato' THEN 30 ELSE 50
+    END,
+    CASE c.name
+        WHEN 'Potato' THEN 40 WHEN 'Rice' THEN 35 WHEN 'Maize' THEN 40 WHEN 'Cassava' THEN 45
+        WHEN 'Sorghum' THEN 50 WHEN 'Common beans' THEN 55 WHEN 'Soybean' THEN 50 WHEN 'Sweet potato' THEN 55
+        WHEN 'Avocado' THEN 70 WHEN 'Cabbage' THEN 40 WHEN 'Carrot' THEN 40 WHEN 'Amaranth (dodo)' THEN 55
+        WHEN 'Plantain (matoke)' THEN 75 WHEN 'Groundnut' THEN 55 WHEN 'Onion' THEN 35
+        WHEN 'Banana' THEN 70 WHEN 'Tomato' THEN 35 ELSE 50
+    END
+FROM districts d
+CROSS JOIN crops c;
 
 -- Placeholder sample prices (RWF, per unit_label) — SAMPLE DATA ONLY
 INSERT INTO prices (food_id, price_rwf, market_name, district, recorded_on, source)

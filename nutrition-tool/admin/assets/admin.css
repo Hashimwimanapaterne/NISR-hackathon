@@ -156,6 +156,20 @@ table.admin-table td a:hover { text-decoration: underline; }
     font-weight: 700;
 }
 
+.admin-form .form-help {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.admin-form .form-help {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: 11px;
+    line-height: 1.5;
+}
+
 .admin-auth-wrap input,
 .admin-form input,
 .admin-form select {

@@ -85,6 +85,52 @@ CREATE TABLE admin_users (
 ) ENGINE=InnoDB;
 
 -- ------------------------------------------------------------
+-- districts: Rwanda district lookup for crop recommendations
+-- ------------------------------------------------------------
+CREATE TABLE districts (
+    id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name        VARCHAR(60) NOT NULL UNIQUE,
+    province    VARCHAR(60) NOT NULL
+) ENGINE=InnoDB;
+
+-- ------------------------------------------------------------
+-- crops: crops linked to their existing food/nutrient records
+-- ------------------------------------------------------------
+CREATE TABLE crops (
+    id                              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name                            VARCHAR(80) NOT NULL UNIQUE,
+    food_id                         INT UNSIGNED NOT NULL,
+    typical_yield_kg_per_hectare    DECIMAL(8,2) NOT NULL,
+    notes                           VARCHAR(255) DEFAULT NULL,
+    rotation_guidance               VARCHAR(500) DEFAULT NULL,
+    soil_stewardship_guidance       VARCHAR(600) DEFAULT NULL,
+    FOREIGN KEY (food_id) REFERENCES foods(id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+-- ------------------------------------------------------------
+-- agro_suitability: per-district scores with auditable provenance
+-- ------------------------------------------------------------
+CREATE TABLE agro_suitability (
+    id                  INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    district_id         INT UNSIGNED NOT NULL,
+    crop_id             INT UNSIGNED NOT NULL,
+    soil_score          DECIMAL(5,2) NOT NULL,
+    climate_score       DECIMAL(5,2) NOT NULL,
+    erosion_control_score DECIMAL(5,2) NOT NULL DEFAULT 50.00,
+    nutrient_balance_score DECIMAL(5,2) NOT NULL DEFAULT 50.00,
+    soil_structure_score DECIMAL(5,2) NOT NULL DEFAULT 50.00,
+    erosion_risk        ENUM('low','medium','high') NOT NULL DEFAULT 'medium',
+    fertilizer_note     VARCHAR(255) DEFAULT NULL,
+    source              VARCHAR(60) NOT NULL DEFAULT 'illustrative_estimate',
+    source_reference    VARCHAR(255) DEFAULT NULL,
+    updated_at          TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_district_crop (district_id, crop_id),
+    INDEX idx_crop (crop_id),
+    FOREIGN KEY (district_id) REFERENCES districts(id) ON DELETE CASCADE,
+    FOREIGN KEY (crop_id) REFERENCES crops(id) ON DELETE CASCADE
+) ENGINE=InnoDB;
+
+-- ------------------------------------------------------------
 -- Convenience view: latest known price per food
 -- ------------------------------------------------------------
 CREATE OR REPLACE VIEW latest_prices AS

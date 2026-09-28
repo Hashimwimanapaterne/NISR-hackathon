@@ -13,3 +13,4 @@ ini_set('log_errors', '1');
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/security.php';
 require_once __DIR__ . '/functions.php';
+require_once __DIR__ . '/crop_scoring.php';
