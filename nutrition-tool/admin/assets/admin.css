@@ -223,6 +223,18 @@ table.admin-table td a:hover { text-decoration: underline; }
 .alert-error { border-color: #e8c4bb; background: #fff3ef; color: var(--color-danger); }
 .alert-success { border-color: #c9ddc8; background: #f0f7ee; color: var(--color-primary-dk); }
 
+.pdf-extraction-progress {
+    margin-top: 16px;
+    padding: 14px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: #f8faf5;
+}
+
+.pdf-extraction-progress p { margin: 0 0 8px; color: var(--color-ink); font-size: 12px; }
+.pdf-extraction-progress progress { width: 100%; min-height: 14px; accent-color: var(--color-primary); }
+.pdf-extraction-progress p:last-child { margin: 8px 0 0; color: var(--color-muted); font-size: 11px; }
+
 .admin-form { max-width: 780px; }
 .form-panel {
     margin: 0 0 18px;

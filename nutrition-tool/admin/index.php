@@ -9,13 +9,28 @@ require_admin_login();
 $pdo = get_db_connection();
 $foods = $pdo->query("
     SELECT f.id, f.name, f.category, f.unit_label, f.is_active,
-           lp.price_rwf, lp.recorded_on
+           lp.id AS latest_price_id, lp.price_rwf, lp.recorded_on, lp.market_name, lp.district,
+           lp.source, lp.source_reference
     FROM foods f
-    LEFT JOIN latest_prices lp ON lp.food_id = f.id
+    LEFT JOIN prices lp
+      ON lp.food_id = f.id
+     AND lp.id = (
+         SELECT latest.id
+         FROM prices latest
+         WHERE latest.food_id = f.id
+         ORDER BY latest.recorded_on DESC, latest.id DESC
+         LIMIT 1
+     )
     ORDER BY f.category, f.name
 ")->fetchAll();
 $activeFoods = count(array_filter($foods, static fn(array $food): bool => (bool) $food['is_active']));
 $foodsWithoutPrice = count(array_filter($foods, static fn(array $food): bool => $food['is_active'] && $food['price_rwf'] === null));
+$samplePriceCount = count(array_filter($foods, static fn(array $food): bool => ($food['source'] ?? '') === 'sample_placeholder'));
+$pricesNeedingRefresh = count(array_filter($foods, static function (array $food): bool {
+    if (!$food['is_active'] || empty($food['recorded_on'])) return false;
+    $recorded = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $food['recorded_on']);
+    return $recorded !== false && $recorded < new DateTimeImmutable('-30 days');
+}));
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -35,6 +50,7 @@ $foodsWithoutPrice = count(array_filter($foods, static fn(array $food): bool => 
         <div class="admin-links">
             <a href="index.php" aria-current="page">Foods &amp; prices</a>
             <a href="food_form.php">Add food</a>
+            <a href="pdf_extract.php">PDF extraction</a>
         </div>
         <span class="spacer"></span>
         <span class="admin-identity">Signed in as <?= h($_SESSION['admin_username'] ?? '') ?></span>
@@ -48,7 +64,7 @@ $foodsWithoutPrice = count(array_filter($foods, static fn(array $food): bool => 
         <div>
             <p class="section-kicker">Market data workspace</p>
             <h1>Foods &amp; prices</h1>
-            <p>Keep food records and market prices fresh for the public nutrition finder.</p>
+            <p>Maintain cited food-composition and market observations; public comparisons reflect only the data entered here.</p>
         </div>
         <a href="food_form.php" class="btn">＋ Add a food</a>
     </div>
@@ -57,10 +73,12 @@ $foodsWithoutPrice = count(array_filter($foods, static fn(array $food): bool => 
         <p class="alert-success"><?= h((string) $_GET['msg']) ?></p>
     <?php endif; ?>
 
-    <section class="admin-summary" aria-label="Food data summary">
+    <section class="admin-summary" aria-label="Food data quality summary">
         <div class="summary-item"><span>Food records</span><strong><?= count($foods) ?></strong></div>
         <div class="summary-item"><span>Active foods</span><strong><?= $activeFoods ?></strong></div>
-        <div class="summary-item"><span>Need a price</span><strong><?= $foodsWithoutPrice ?></strong></div>
+        <div class="summary-item"><span>No price</span><strong><?= $foodsWithoutPrice ?></strong></div>
+        <div class="summary-item"><span>Sample prices</span><strong><?= $samplePriceCount ?></strong></div>
+        <div class="summary-item"><span>Prices older than 30 days</span><strong><?= $pricesNeedingRefresh ?></strong></div>
     </section>
 
     <div class="admin-table-shell">
@@ -70,7 +88,8 @@ $foodsWithoutPrice = count(array_filter($foods, static fn(array $food): bool => 
                     <th scope="col">Food</th>
                     <th scope="col">Category</th>
                     <th scope="col">Latest price</th>
-                    <th scope="col">Recorded</th>
+                    <th scope="col">Market / date</th>
+                    <th scope="col">Source</th>
                     <th scope="col">Status</th>
                     <th scope="col">Actions</th>
                 </tr>
@@ -81,17 +100,40 @@ $foodsWithoutPrice = count(array_filter($foods, static fn(array $food): bool => 
                     <td><?= h($f['name']) ?></td>
                     <td><?= h($f['category']) ?></td>
                     <td><?= $f['price_rwf'] !== null ? number_format((float) $f['price_rwf']) . ' RWF / ' . h($f['unit_label']) : '—' ?></td>
-                    <td><?= h($f['recorded_on'] ?? '—') ?></td>
+                    <td><?= h(implode(' · ', array_filter([
+                        $f['market_name'] ?? null,
+                        $f['district'] ?? null,
+                        $f['recorded_on'] ?? null,
+                    ], static fn($value): bool => $value !== null && $value !== ''))) ?></td>
+                    <td>
+                        <?php
+                        $priceSourceLabels = [
+                            'sample_placeholder' => 'Sample placeholder',
+                            'manual_observation' => 'Direct observation',
+                            'esoko_import' => 'e-Soko dataset',
+                            'nisr_dataset' => 'NISR dataset',
+                            'other_public_dataset' => 'Other public dataset',
+                        ];
+                        echo h($priceSourceLabels[$f['source'] ?? ''] ?? ($f['source'] ?? 'Unknown'));
+                        ?>
+                        <?php if (!empty($f['source_reference'])): ?>
+                            <span class="food-meta"><?= h($f['source_reference']) ?></span>
+                        <?php endif; ?>
+                    </td>
                     <td><span class="status-badge<?= $f['is_active'] ? '' : ' is-hidden' ?>"><?= $f['is_active'] ? 'Active' : 'Hidden' ?></span></td>
                     <td>
-                        <a href="food_form.php?id=<?= (int) $f['id'] ?>">Edit</a>
+                        <a href="food_form.php?id=<?= (int) $f['id'] ?>">Edit food &amp; nutrients</a>
                         <span aria-hidden="true"> · </span>
+                        <?php if ($f['latest_price_id'] !== null): ?>
+                            <a href="price_add.php?food_id=<?= (int) $f['id'] ?>&amp;id=<?= (int) $f['latest_price_id'] ?>">Edit latest price</a>
+                            <span aria-hidden="true"> · </span>
+                        <?php endif; ?>
                         <a href="price_add.php?food_id=<?= (int) $f['id'] ?>">Add price</a>
                     </td>
                 </tr>
             <?php endforeach; ?>
             <?php if (empty($foods)): ?>
-                <tr><td colspan="6" class="empty-table">No foods added yet. <a href="food_form.php">Add your first food</a>.</td></tr>
+                <tr><td colspan="7" class="empty-table">No foods added yet. <a href="food_form.php">Add your first food</a>.</td></tr>
             <?php endif; ?>
             </tbody>
         </table>

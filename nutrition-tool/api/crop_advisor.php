@@ -1,11 +1,11 @@
 <?php
 /**
  * GET /api/crop_advisor.php?district_id=21&forecast_season=A-2026
- * forecast_season is optional; defaults to the next available season.
+ * forecast_season is optional; the default is the current Rwanda season.
  *
- * Returns ranked crop suggestions for one district, combining soil
- * and climate suitability, soil stewardship, market price momentum,
- * and nutrition-per-hectare via the C++ scoring engine.
+ * Returns ranked crop suggestions for one district using the available,
+ * cited dimensions. Missing complete soil or stewardship data is excluded from
+ * the composite; climate fit uses the selected public seasonal weather forecast.
  */
 
 declare(strict_types=1);
@@ -48,18 +48,22 @@ try {
         exit;
     }
 
-    $candidates = get_crop_candidates($pdo, $districtId);
+    $selectedSeason = $requestedForecastSeason ?? current_rwanda_growing_season();
+    $season = $selectedSeason[0];
+    $candidates = get_crop_candidates($pdo, $districtId, $season);
     if (empty($candidates)) {
         echo json_encode([
             'district' => $district,
             'results' => [],
-            'note' => 'No suitability data recorded for this district yet.',
+            'note' => 'No crops with usable nutrient profiles and yield evidence are available for this district and season yet.',
         ]);
         exit;
     }
-
     $weather = fetch_district_weather_forecast($district);
-    $selectedForecastSeason = $requestedForecastSeason ?? $weather['default_forecast_season'];
+    $defaultSeason = array_key_exists($selectedSeason, $weather['seasonal_forecast'])
+        ? $selectedSeason
+        : $weather['default_forecast_season'];
+    $selectedForecastSeason = $requestedForecastSeason ?? $defaultSeason;
     if (!array_key_exists($selectedForecastSeason, $weather['seasonal_forecast'])) {
         http_response_code(400);
         echo json_encode([
@@ -68,15 +72,32 @@ try {
         ]);
         exit;
     }
+    $selectedSeason = $selectedForecastSeason;
+    if ($selectedSeason[0] !== $season) {
+        $season = $selectedSeason[0];
+        $candidates = get_crop_candidates($pdo, $districtId, $season);
+        if (empty($candidates)) {
+            echo json_encode([
+                'district' => $district,
+                'results' => [],
+                'note' => 'No crops with usable nutrient profiles and yield evidence are available for this district and season yet.',
+                'yield_season' => $selectedSeason,
+            ]);
+            exit;
+        }
+    }
     $weather['selected_forecast_season'] = $selectedForecastSeason;
     $weather['selected_season'] = $weather['seasonal_forecast'][$selectedForecastSeason];
     incorporate_forecast_weather($candidates, $weather, $selectedForecastSeason);
-    $scored = run_crop_scorer($candidates);
+    $scoringWeights = available_crop_scoring_weights($candidates);
+
+    $scored = run_crop_scorer($candidates, $scoringWeights);
     $scored = merge_candidate_context($scored, $candidates);
 
     echo json_encode([
         'district' => $district,
         'weather' => $weather,
+        'yield_season' => $selectedSeason,
         'results' => $scored,
     ], JSON_PRETTY_PRINT);
 

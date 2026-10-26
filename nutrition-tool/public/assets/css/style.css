@@ -111,6 +111,66 @@ input:focus-visible {
 .nav-link span { margin-left: 5px; color: var(--color-accent); }
 .nav-link:hover { color: #fff; }
 
+.language-control {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 7px;
+}
+
+.language-control label {
+    color: #e5eee5;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.language-control select,
+.language-control button {
+    min-height: 34px;
+    padding: 5px 9px;
+    border: 1px solid rgba(255, 255, 255, .35);
+    border-radius: 6px;
+    background: #fffefa;
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 11px;
+}
+
+.language-control button {
+    border-color: var(--color-accent);
+    background: var(--color-accent);
+    color: var(--color-primary-dk);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.language-control button:hover {
+    background: #f5c969;
+}
+
+.language-control select:focus-visible,
+.language-control button:focus-visible {
+    outline: 3px solid var(--color-accent);
+    outline-offset: 3px;
+}
+
+@media (max-width: 760px) {
+    .topbar {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+        gap: 12px 20px;
+        padding-block: 12px;
+    }
+}
+
+@media (max-width: 560px) {
+    .language-control {
+        width: 100%;
+        flex-wrap: wrap;
+        margin-top: 3px;
+    }
+}
+
 .hero {
     position: relative;
     z-index: 1;
@@ -173,6 +233,33 @@ input:focus-visible {
 }
 
 .hero-meta-icon { color: var(--color-accent); font-size: 17px; }
+
+.hero-cta {
+    display: inline-flex;
+    min-height: 46px;
+    align-items: center;
+    gap: 12px;
+    margin-top: 25px;
+    padding: 0 17px;
+    border-radius: 8px;
+    background: var(--color-accent);
+    color: var(--color-primary-dk);
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.hero-cta:hover { background: #f5cb70; }
+
+.hero-secondary-link {
+    display: block;
+    width: fit-content;
+    margin-top: 13px;
+    color: #e5eee5;
+    font-size: 12px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
 
 main.wrap { padding-block: 72px 88px; }
 
@@ -374,6 +461,18 @@ table.ledger tbody tr:hover { background: #f8faf5; }
 .food-name { display: block; color: var(--color-ink); font-size: 13px; font-weight: 700; }
 .food-meta { display: block; margin-top: 3px; color: #869188; font-size: 10px; }
 .price-value { color: #536258 !important; }
+.price-meta,
+.price-source-reference {
+    display: block;
+    margin-top: 4px;
+    color: var(--color-muted);
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.4;
+    text-align: right;
+}
+.price-meta.is-aging { color: #8a6410; }
+.price-meta.is-stale { color: var(--color-danger); font-weight: 600; }
 .nutrient-value { color: var(--color-primary) !important; font-size: 14px !important; font-weight: 700; }
 
 .loading-state,
@@ -579,6 +678,17 @@ table.ledger tbody tr:hover { background: #f8faf5; }
     background: #fff;
 }
 
+.daily-value-card.daily-value-low,
+.daily-value-card.daily-value-high {
+    border-color: #d99385;
+    background: #fff0ed;
+}
+
+.daily-value-card.daily-value-watch {
+    border-color: #e6c77d;
+    background: #fff9e9;
+}
+
 .daily-value-card-top {
     display: flex;
     align-items: baseline;
@@ -601,6 +711,18 @@ table.ledger tbody tr:hover { background: #f8faf5; }
     text-align: right;
 }
 
+.daily-value-low .daily-value-card-top > span,
+.daily-value-high .daily-value-card-top > span,
+.daily-value-low p strong,
+.daily-value-high p strong {
+    color: var(--color-danger);
+}
+
+.daily-value-watch .daily-value-card-top > span,
+.daily-value-watch p strong {
+    color: #8a6410;
+}
+
 .daily-value-track {
     height: 6px;
     margin-top: 10px;
@@ -616,10 +738,26 @@ table.ledger tbody tr:hover { background: #f8faf5; }
     background: var(--color-primary);
 }
 
+.daily-value-low .daily-value-track span,
+.daily-value-high .daily-value-track span {
+    background: var(--color-danger);
+}
+
+.daily-value-watch .daily-value-track span {
+    background: #c28b17;
+}
+
 .daily-value-card p {
     margin: 5px 0 0;
     color: var(--color-muted);
     font-size: 10px;
+}
+
+.daily-value-card .daily-value-impact {
+    padding-top: 6px;
+    border-top: 1px solid rgba(29, 45, 39, .08);
+    font-size: 10px;
+    line-height: 1.5;
 }
 
 .meal-empty {
@@ -678,7 +816,7 @@ table.ledger tbody tr:hover { background: #f8faf5; }
 @media (max-width: 560px) {
     body { font-size: 14px; }
     .wrap { width: min(100% - 28px, 1120px); }
-    .topbar { min-height: 64px; }
+    .topbar { min-height: 64px; flex-wrap: wrap; justify-content: flex-start; gap: 8px 14px; padding-block: 12px; }
     .brand { font-size: 15px; }
     .brand-mark { width: 30px; height: 30px; font-size: 20px; }
     .nav-link { font-size: 11px; }

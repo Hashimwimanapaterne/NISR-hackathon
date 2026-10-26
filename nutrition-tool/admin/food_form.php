@@ -15,7 +15,10 @@ $errors = [];
 $food = [
     'id' => 0, 'name' => '', 'category' => '', 'unit_label' => 'kg', 'grams_per_unit' => 1000,
 ];
-$nutrients = array_fill_keys(array_keys(ALLOWED_NUTRIENTS), '');
+$nutrients = array_merge(
+    array_fill_keys(array_keys(ALLOWED_NUTRIENTS), ''),
+    ['preparation_state' => '', 'source_note' => '']
+);
 
 if ($foodId > 0) {
     $stmt = $pdo->prepare('SELECT * FROM foods WHERE id = :id');
@@ -42,16 +45,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $category      = trim((string) ($_POST['category'] ?? ''));
     $unitLabel     = trim((string) ($_POST['unit_label'] ?? ''));
     $gramsPerUnit  = (float) ($_POST['grams_per_unit'] ?? 0);
+    $preparationState = trim((string) ($_POST['preparation_state'] ?? ''));
+    $sourceNote = trim((string) ($_POST['source_note'] ?? ''));
 
     if ($name === '') $errors[] = 'Name is required.';
     if ($category === '') $errors[] = 'Category is required.';
     if ($unitLabel === '') $errors[] = 'Unit label is required.';
-    if ($gramsPerUnit <= 0) $errors[] = 'Grams per unit must be a positive number.';
+    if (!is_finite($gramsPerUnit) || $gramsPerUnit <= 0) $errors[] = 'Grams per unit must be a positive number.';
+    if ($preparationState === '') $errors[] = 'Food preparation state is required.';
+    if (strlen($preparationState) > 80) $errors[] = 'Food preparation state must be 80 characters or fewer.';
+    if ($sourceNote === '') $errors[] = 'Add a data source citation or explain that the values are estimates.';
+    if (strlen($sourceNote) > 255) $errors[] = 'Nutrition source details must be 255 characters or fewer.';
 
     $nutrientInput = [];
     foreach (array_keys(ALLOWED_NUTRIENTS) as $col) {
         $val = (float) ($_POST[$col] ?? 0);
-        if ($val < 0) $errors[] = ALLOWED_NUTRIENTS[$col]['label'] . ' cannot be negative.';
+        if (!is_finite($val) || $val < 0) $errors[] = ALLOWED_NUTRIENTS[$col]['label'] . ' must be a finite, non-negative value.';
         $nutrientInput[$col] = $val;
     }
 
@@ -90,11 +99,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $placeholders = implode(', ', array_map(fn($c) => ":{$c}", $nutrientCols));
 
             $stmt = $pdo->prepare("
-                INSERT INTO nutrient_profiles (food_id, {$insertCols}, source_note)
-                VALUES (:food_id, {$placeholders}, :note)
-                ON DUPLICATE KEY UPDATE {$setClause}
+                INSERT INTO nutrient_profiles (food_id, {$insertCols}, preparation_state, source_note)
+                VALUES (:food_id, {$placeholders}, :preparation_state, :note)
+                ON DUPLICATE KEY UPDATE {$setClause},
+                    preparation_state = VALUES(preparation_state),
+                    source_note = VALUES(source_note)
             ");
-            $bindings = [':food_id' => $foodId, ':note' => 'Entered via admin panel'];
+            $bindings = [
+                ':food_id' => $foodId,
+                ':preparation_state' => $preparationState,
+                ':note' => $sourceNote,
+            ];
             foreach ($nutrientCols as $col) {
                 $bindings[":{$col}"] = $nutrientInput[$col];
             }
@@ -112,7 +127,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Re-populate the form with submitted values on validation failure.
     $food = ['id' => $foodId, 'name' => $name, 'category' => $category, 'unit_label' => $unitLabel, 'grams_per_unit' => $gramsPerUnit];
-    $nutrients = $nutrientInput;
+    $nutrients = array_merge($nutrientInput, [
+        'preparation_state' => $preparationState,
+        'source_note' => $sourceNote,
+    ]);
 }
 ?>
 <!DOCTYPE html>
@@ -146,7 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <div>
             <p class="section-kicker">Food catalog</p>
             <h1><?= $foodId > 0 ? 'Edit food' : 'Add a food' ?></h1>
-            <p>Enter food details and nutrition values per 100g edible portion.</p>
+            <p>Enter the food's state and nutrient provenance so comparisons can be interpreted and audited.</p>
         </div>
     </div>
 
@@ -200,6 +218,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 </div>
             </section>
         <?php endforeach; ?>
+
+        <section class="form-panel" aria-labelledby="nutrition-provenance-title">
+            <h2 id="nutrition-provenance-title">Nutrition data provenance</h2>
+            <div class="form-grid">
+                <div class="form-field">
+                    <label for="preparation_state">Food state / preparation</label>
+                    <input type="text" id="preparation_state" name="preparation_state" required maxlength="80"
+                           value="<?= h((string) ($nutrients['preparation_state'] ?? '')) ?>"
+                           placeholder="e.g. dry, raw edible portion, or cooked">
+                </div>
+                <div class="form-field">
+                    <label for="source_note">Dataset citation and notes</label>
+                    <input type="text" id="source_note" name="source_note" required maxlength="255"
+                           value="<?= h((string) ($nutrients['source_note'] ?? '')) ?>"
+                           placeholder="Dataset, publisher, year, table/page, URL">
+                </div>
+            </div>
+            <p class="form-help">If values are provisional, label them estimates. Do not describe generated or typical values as NISR, FAO, or lab data unless they were actually taken from that source. Values are stored per 100 g for the stated food condition.</p>
+        </section>
 
         <div class="actions">
             <button type="submit" class="btn"><?= $foodId > 0 ? 'Save changes' : 'Save food' ?></button>

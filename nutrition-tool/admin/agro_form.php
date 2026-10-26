@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $soilStructure = (float) ($_POST['soil_structure_score'] ?? -1);
     $erosion = (string) ($_POST['erosion_risk'] ?? '');
     $fertNote = trim((string) ($_POST['fertilizer_note'] ?? ''));
-    $source = (string) ($_POST['source'] ?? 'illustrative_estimate');
+    $source = (string) ($_POST['source'] ?? '');
     $sourceReference = trim((string) ($_POST['source_reference'] ?? ''));
 
     if ($soil < 0 || $soil > 100) $errors[] = 'Soil score must be between 0 and 100.';
@@ -44,10 +44,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($nutrientBalance < 0 || $nutrientBalance > 100) $errors[] = 'Nutrient balance score must be between 0 and 100.';
     if ($soilStructure < 0 || $soilStructure > 100) $errors[] = 'Soil structure score must be between 0 and 100.';
     if (!in_array($erosion, ['low', 'medium', 'high'], true)) $errors[] = 'Erosion risk must be low, medium, or high.';
-    if (!in_array($source, ['illustrative_estimate', 'rwasis_import', 'soilgrids_isric'], true)) $errors[] = 'Invalid source value.';
+    if (!in_array($source, ['nisr_import', 'rwasis_import', 'soilgrids_isric', 'other_public_dataset'], true)) $errors[] = 'Select a documented data source.';
     if (strlen($sourceReference) > 255) $errors[] = 'Source reference must be 255 characters or fewer.';
-    if ($source !== 'illustrative_estimate' && $sourceReference === '') {
-        $errors[] = 'Add a citation or dataset reference for imported soil data.';
+    if ($sourceReference === '') {
+        $errors[] = 'Add a citation or dataset reference for this suitability record.';
     }
 
     if (empty($errors)) {
@@ -127,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <label for="soil_structure_score">Soil structure / organic matter potential (0-100)</label>
         <input type="number" step="0.01" min="0" max="100" id="soil_structure_score" name="soil_structure_score" required value="<?= h((string) $row['soil_structure_score']) ?>">
-        <p class="form-help">Higher values indicate stronger expected stewardship under suitable management. Assess locally; defaults are illustrative.</p>
+        <p class="form-help">Higher values indicate stronger expected stewardship under suitable management. Assess locally and cite the source used.</p>
 
         <label for="erosion_risk">Erosion risk</label>
         <select id="erosion_risk" name="erosion_risk">
@@ -141,14 +141,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <label for="source">Data source</label>
         <select id="source" name="source">
-            <option value="illustrative_estimate" <?= $row['source'] === 'illustrative_estimate' ? 'selected' : '' ?>>Illustrative estimate</option>
+            <option value="" disabled <?= empty($row['source']) || $row['source'] === 'illustrative_estimate' ? 'selected' : '' ?>>Select a cited source</option>
+            <option value="nisr_import" <?= $row['source'] === 'nisr_import' ? 'selected' : '' ?>>NISR data (document derivation)</option>
             <option value="rwasis_import" <?= $row['source'] === 'rwasis_import' ? 'selected' : '' ?>>RwaSIS import</option>
             <option value="soilgrids_isric" <?= $row['source'] === 'soilgrids_isric' ? 'selected' : '' ?>>SoilGrids (ISRIC) fallback</option>
+            <option value="other_public_dataset" <?= $row['source'] === 'other_public_dataset' ? 'selected' : '' ?>>Other public dataset</option>
         </select>
 
         <label for="source_reference">Source citation / dataset details</label>
         <input type="text" id="source_reference" name="source_reference" maxlength="255" value="<?= h((string) ($row['source_reference'] ?? '')) ?>" placeholder="URL, dataset version, depth, and location">
-        <p class="form-help">For SoilGrids, record the dataset or export, depth interval, property and statistic used. It provides soil-property maps, not crop-suitability scores; document how the score was derived.</p>
+        <p class="form-help">Use a matching NISR observation when available; otherwise cite an eligible public source. For SoilGrids, record the dataset or export, depth interval, property and statistic used. It provides soil-property maps, not crop-suitability scores; document how the score was derived.</p>
         <p class="form-help"><a href="https://soilgrids.org/" target="_blank" rel="noopener noreferrer">SoilGrids (ISRIC)</a> · <a href="https://docs.isric.org/globaldata/soilgrids/" target="_blank" rel="noopener noreferrer">Documentation</a></p>
 
         <div class="actions">

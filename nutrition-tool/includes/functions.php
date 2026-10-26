@@ -65,7 +65,12 @@ function get_ranked_foods(PDO $pdo, string $nutrientColumn, ?string $category, i
             lp.price_rwf,
             lp.market_name,
             lp.recorded_on,
+            lp.district,
+            lp.source,
+            lp.source_reference,
             np.{$nutrientColumn} AS nutrient_value,
+            np.preparation_state,
+            np.source_note,
             ROUND((lp.price_rwf / f.grams_per_unit) * 100, 2) AS cost_per_100g,
             CASE
                 WHEN lp.price_rwf > 0

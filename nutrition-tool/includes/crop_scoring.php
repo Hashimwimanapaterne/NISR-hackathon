@@ -2,16 +2,28 @@
 /**
  * Crop Advisor domain logic (Phase 2).
  *
- * Gathers the scoring inputs for each candidate crop in a district
- * — soil, climate, and soil stewardship come from agro_suitability; market and
- * nutrition are computed here from Phase 1's prices/nutrient_profiles
- * tables — then hands them to the compiled C++ scoring engine
- * (bin/crop_scorer) to weight and rank.
+ * Gathers cited scoring inputs available for each candidate crop and
+ * renormalizes the composite weights when a complete dimension is unavailable.
+ * The PHP layer then applies observed-yield and food-production-priority
+ * adjustments after the compiled C++ scoring engine calculates supporting scores.
  */
 
 declare(strict_types=1);
 
 const CROP_SCORER_BINARY = __DIR__ . '/../bin/crop_scorer' . (PHP_OS_FAMILY === 'Windows' ? '.exe' : '');
+const OBSERVED_YIELD_SCORE_WEIGHT = 0.40;
+const PRODUCTION_PRIORITY_SCORE_WEIGHT = 0.20;
+const NISR_PUBLISHER = 'National Institute of Statistics of Rwanda (NISR)';
+
+function crop_production_priority_score(string $foodCategory): float
+{
+    return match ($foodCategory) {
+        'Grains', 'Tubers', 'Legumes' => 100.0,
+        'Fruits & Starch' => 75.0,
+        'Vegetables' => 20.0,
+        default => 50.0,
+    };
+}
 
 function crop_scorer_build_command(): string
 {
@@ -78,6 +90,7 @@ function fetch_district_weather_forecast(array $district): array
         if ($cachedJson !== false) {
             $cached = json_decode($cachedJson, true);
             if (is_array($cached)
+                && ($cached['coverage_version'] ?? null) === 2
                 && isset($cached['seasonal_forecast'], $cached['default_forecast_season'], $cached['fetched_at'])
             ) {
                 return $cached;
@@ -144,6 +157,8 @@ function fetch_district_weather_forecast(array $district): array
     if (!is_array($daily)
         || !isset($daily['time'], $daily['temperature_2m_mean'], $daily['precipitation_sum'])
         || !is_array($daily['time'])
+        || !is_array($daily['temperature_2m_mean'])
+        || !is_array($daily['precipitation_sum'])
         || count($daily['time']) < 25
     ) {
         throw new RuntimeException('The weather provider returned an incomplete seasonal forecast.');
@@ -151,36 +166,47 @@ function fetch_district_weather_forecast(array $district): array
 
     $seasonValues = [];
     $days = count($daily['time']);
+    $incompleteDays = 0;
+    $today = new DateTimeImmutable('today', new DateTimeZone('Africa/Kigali'));
+    $todayIso = $today->format('Y-m-d');
     for ($i = 0; $i < $days; $i++) {
         $date = $daily['time'][$i] ?? null;
         $temperature = $daily['temperature_2m_mean'][$i] ?? null;
         $rain = $daily['precipitation_sum'][$i] ?? null;
-        if (!is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date)
-            || !is_numeric($temperature) || !is_numeric($rain)
-        ) {
+        if (!is_string($date) || !preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date)) {
             throw new RuntimeException('The weather provider returned incomplete daily seasonal values.');
+        }
+        if ($date < $todayIso) {
+            continue;
+        }
+        if (!is_numeric($temperature) || !is_numeric($rain)) {
+            $incompleteDays++;
+            continue;
         }
         $dateParts = explode('-', $date);
         $year = (int) $dateParts[0];
         $month = (int) $dateParts[1];
-        if ($month >= 9 || $month <= 1) {
+        if ($month >= 9 || $month <= 2) {
             $seasonYear = $month >= 9 ? $year : $year - 1;
             $seasonKey = 'A-' . $seasonYear;
             $seasonName = 'Season A ' . $seasonYear . '/' . ($seasonYear + 1);
             $seasonStart = sprintf('%04d-09-01', $seasonYear);
-            $seasonEnd = sprintf('%04d-01-31', $seasonYear + 1);
+            $seasonEnd = sprintf('%04d-02-28', $seasonYear + 1);
+            if (checkdate(2, 29, $seasonYear + 1)) {
+                $seasonEnd = sprintf('%04d-02-29', $seasonYear + 1);
+            }
         } elseif ($month <= 6) {
             $seasonYear = $year;
             $seasonKey = 'B-' . $seasonYear;
             $seasonName = 'Season B ' . $seasonYear;
-            $seasonStart = sprintf('%04d-02-01', $seasonYear);
+            $seasonStart = sprintf('%04d-03-01', $seasonYear);
             $seasonEnd = sprintf('%04d-06-30', $seasonYear);
         } else {
             $seasonYear = $year;
             $seasonKey = 'C-' . $seasonYear;
             $seasonName = 'Season C ' . $seasonYear;
             $seasonStart = sprintf('%04d-07-01', $seasonYear);
-            $seasonEnd = sprintf('%04d-08-31', $seasonYear);
+            $seasonEnd = sprintf('%04d-09-30', $seasonYear);
         }
         if (!isset($seasonValues[$seasonKey])) {
             $seasonValues[$seasonKey] = [
@@ -199,11 +225,21 @@ function fetch_district_weather_forecast(array $district): array
         $seasonValues[$seasonKey]['days']++;
         $seasonValues[$seasonKey]['forecast_end'] = $date;
     }
+    if ($incompleteDays > 0) {
+        error_log(
+            'Open-Meteo returned incomplete daily seasonal values for district ' .
+            $district['name'] . '; skipped ' . $incompleteDays . ' day(s).'
+        );
+    }
     $seasonalForecast = [];
     foreach ($seasonValues as $seasonKey => $values) {
         $seasonStart = new DateTimeImmutable($values['season_start']);
         $seasonEnd = new DateTimeImmutable($values['season_end']);
-        $expectedDays = (int) $seasonStart->diff($seasonEnd)->days + 1;
+        if ($seasonEnd < $today) {
+            continue;
+        }
+        $coverageStart = $seasonStart > $today ? $seasonStart : $today;
+        $expectedDays = (int) $coverageStart->diff($seasonEnd)->days + 1;
         $coverage = $values['days'] / $expectedDays;
         if ($coverage < 0.70) {
             continue;
@@ -229,6 +265,7 @@ function fetch_district_weather_forecast(array $district): array
         return strcmp($first['forecast_start'], $second['forecast_start']);
     });
     $weather = [
+        'coverage_version' => 2,
         'provider' => 'Open-Meteo',
         'model' => 'ECMWF SEAS5 ensemble mean',
         'location' => (string) ($location['name'] ?? $district['name']),
@@ -261,7 +298,10 @@ function crop_weather_score(string $cropName, float $averageTemperatureC, float 
         'onion' => [15, 25, 10, 55], 'banana' => [22, 30, 35, 120],
         'tomato' => [18, 28, 15, 75],
     ];
-    $profile = $requirements[strtolower(trim($cropName))] ?? [18, 30, 15, 85];
+    $profile = $requirements[strtolower(trim($cropName))] ?? null;
+    if ($profile === null) {
+        throw new RuntimeException('No weather-fit profile is configured for crop: ' . $cropName . '.');
+    }
 
     $rangeScore = static function (float $value, float $minimum, float $maximum, float $tolerance): float {
         if ($value >= $minimum && $value <= $maximum) {
@@ -283,7 +323,9 @@ function incorporate_forecast_weather(array &$candidates, array $weather, string
         throw new InvalidArgumentException('The selected season is outside the available seasonal forecast.');
     }
     foreach ($candidates as &$candidate) {
-        $baseline = (float) $candidate['climate_score'];
+        $baseline = is_numeric($candidate['climate_score'])
+            ? (float) $candidate['climate_score']
+            : null;
         $weatherScore = crop_weather_score(
             (string) $candidate['crop_name'],
             (float) $seasonForecast['temperature_mean_c'],
@@ -291,9 +333,54 @@ function incorporate_forecast_weather(array &$candidates, array $weather, string
         );
         $candidate['climate_baseline_score'] = $baseline;
         $candidate['weather_score'] = $weatherScore;
-        $candidate['climate_score'] = ($baseline * 0.70) + ($weatherScore * 0.30);
+        $candidate['climate_score'] = $baseline === null
+            ? $weatherScore
+            : ($baseline * 0.70) + ($weatherScore * 0.30);
     }
     unset($candidate);
+}
+
+function available_crop_scoring_weights(array $candidates): array
+{
+    $allHave = static function (array $columns) use ($candidates): bool {
+        foreach ($candidates as $candidate) {
+            foreach ($columns as $column) {
+                if (!isset($candidate[$column]) || !is_numeric($candidate[$column])) {
+                    return false;
+                }
+            }
+        }
+        return $candidates !== [];
+    };
+
+    return [
+        'soil' => $allHave(['soil_score']) ? 0.25 : 0.0,
+        'climate' => $allHave(['climate_score']) ? 0.20 : 0.0,
+        'market' => 0.20,
+        'nutrition' => 0.15,
+        'stewardship' => $allHave([
+            'erosion_control_score',
+            'nutrient_balance_score',
+            'soil_structure_score',
+        ]) ? 0.20 : 0.0,
+    ];
+}
+
+function current_rwanda_growing_season(): string
+{
+    $today = new DateTimeImmutable('now', new DateTimeZone('Africa/Kigali'));
+    $month = (int) $today->format('n');
+    $year = (int) $today->format('Y');
+    if ($month >= 9) {
+        return 'A-' . ($year + 1);
+    }
+    if ($month <= 2) {
+        return 'A-' . $year;
+    }
+    if ($month <= 6) {
+        return 'B-' . $year;
+    }
+    return 'C-' . $year;
 }
 
 /** All districts, for the location selector. */
@@ -305,25 +392,69 @@ function get_districts_list(PDO $pdo): array
 /**
  * Compute a 0-100 market-price-momentum score for a food: how the
  * latest recorded price compares to the average of prior recorded
- * prices. 50 = flat/no history, >50 = price trending up (good time
- * to plant/sell), <50 = trending down.
+ * prices from one district within the last year. It aggregates market
+ * observations by date so several markets on one day cannot masquerade
+ * as a temporal trend. 50 means insufficient history or no net change.
  */
-function compute_market_score(PDO $pdo, int $foodId): float
+function compute_market_score(PDO $pdo, int $foodId, string $districtName): array
 {
-    $stmt = $pdo->prepare('SELECT price_rwf, recorded_on FROM prices WHERE food_id = :id ORDER BY recorded_on ASC');
-    $stmt->execute([':id' => $foodId]);
+    $stmt = $pdo->prepare('
+        SELECT price_rwf, recorded_on, source_reference
+        FROM prices
+        WHERE food_id = :food_id
+          AND district = :district
+          AND source <> :sample_source
+          AND recorded_on >= DATE_SUB(CURDATE(), INTERVAL 1 YEAR)
+          AND recorded_on <= CURDATE()
+        ORDER BY recorded_on ASC, id ASC
+    ');
+    $stmt->execute([
+        ':food_id' => $foodId,
+        ':district' => $districtName,
+        ':sample_source' => 'sample_placeholder',
+    ]);
     $rows = $stmt->fetchAll();
+    $sourceReferences = array_values(array_unique(array_filter(
+        array_map(static fn (array $row): string => trim((string) ($row['source_reference'] ?? '')), $rows),
+        static fn (string $reference): bool => $reference !== ''
+    )));
 
-    if (count($rows) < 2) {
-        return 50.0; // not enough history to compute a trend
+    $pricesByDate = [];
+    foreach ($rows as $row) {
+        $date = (string) $row['recorded_on'];
+        $pricesByDate[$date][] = (float) $row['price_rwf'];
+    }
+    $dailyAverages = [];
+    foreach ($pricesByDate as $date => $prices) {
+        $dailyAverages[$date] = array_sum($prices) / count($prices);
+    }
+    $dates = array_keys($dailyAverages);
+
+    if (count($dates) < 2) {
+        return [
+            'score' => 50.0,
+            'observation_count' => count($rows),
+            'observation_dates' => count($dates),
+            'first_date' => $dates[0] ?? null,
+            'latest_date' => $dates[0] ?? null,
+            'source_references' => $sourceReferences,
+        ];
     }
 
-    $latest = (float) end($rows)['price_rwf'];
-    $priorRows = array_slice($rows, 0, -1);
-    $priorAvg = array_sum(array_map(function ($r) { return (float) $r['price_rwf']; }, $priorRows)) / count($priorRows);
+    $latestDate = end($dates);
+    $latest = $dailyAverages[$latestDate];
+    $priorAverages = array_slice(array_values($dailyAverages), 0, -1);
+    $priorAvg = array_sum($priorAverages) / count($priorAverages);
 
     if ($priorAvg <= 0.0) {
-        return 50.0;
+        return [
+            'score' => 50.0,
+            'observation_count' => count($rows),
+            'observation_dates' => count($dates),
+            'first_date' => $dates[0],
+            'latest_date' => $latestDate,
+            'source_references' => $sourceReferences,
+        ];
     }
 
     $momentumPct = (($latest - $priorAvg) / $priorAvg) * 100.0;
@@ -331,7 +462,14 @@ function compute_market_score(PDO $pdo, int $foodId): float
     // around the neutral midpoint of 50.
     $score = 50.0 + ($momentumPct * 2.0);
 
-    return max(0.0, min(100.0, $score));
+    return [
+        'score' => max(0.0, min(100.0, $score)),
+        'observation_count' => count($rows),
+        'observation_dates' => count($dates),
+        'first_date' => $dates[0],
+        'latest_date' => $latestDate,
+        'source_references' => $sourceReferences,
+    ];
 }
 
 /**
@@ -358,8 +496,19 @@ function crop_nutrient_definitions(): array
     ];
 }
 
-function get_crop_candidates(PDO $pdo, int $districtId): array
+function get_crop_candidates(PDO $pdo, int $districtId, string $season): array
 {
+    if (!in_array($season, ['A', 'B', 'C'], true)) {
+        throw new InvalidArgumentException('A valid Rwanda growing season is required.');
+    }
+
+    $districtStatement = $pdo->prepare('SELECT name FROM districts WHERE id = :id');
+    $districtStatement->execute([':id' => $districtId]);
+    $districtName = $districtStatement->fetchColumn();
+    if (!is_string($districtName)) {
+        return [];
+    }
+
     $nutrientDefinitions = crop_nutrient_definitions();
     $nutrientColumns = implode(', ', array_map(
         static function (string $column): string {
@@ -373,6 +522,10 @@ function get_crop_candidates(PDO $pdo, int $districtId): array
             c.name AS crop_name,
             c.food_id,
             c.typical_yield_kg_per_hectare,
+            c.harvest_days_min,
+            c.harvest_days_max,
+            c.harvest_duration_note,
+            c.notes AS crop_notes,
             a.soil_score,
             a.climate_score,
             a.erosion_control_score,
@@ -382,28 +535,195 @@ function get_crop_candidates(PDO $pdo, int $districtId): array
             a.fertilizer_note,
             a.source,
             a.source_reference,
+            a.updated_at AS suitability_updated_at,
             c.rotation_guidance,
             c.soil_stewardship_guidance,
             ' . $nutrientColumns . ',
+            np.source_note AS nutrition_source_note,
             f.name AS food_name,
+            f.category AS food_category,
             f.unit_label
         FROM crops c
-        INNER JOIN agro_suitability a ON a.crop_id = c.id AND a.district_id = :district_id
+        LEFT JOIN agro_suitability a
+          ON a.crop_id = c.id AND a.district_id = :district_id
+         AND a.source <> :illustrative_source
+         AND a.source_reference IS NOT NULL AND LENGTH(TRIM(a.source_reference)) > 0
+         AND a.soil_score IS NOT NULL AND a.climate_score IS NOT NULL
+         AND a.erosion_control_score IS NOT NULL
+         AND a.nutrient_balance_score IS NOT NULL
+         AND a.soil_structure_score IS NOT NULL
         INNER JOIN nutrient_profiles np ON np.food_id = c.food_id
         INNER JOIN foods f ON f.id = c.food_id
+        WHERE (c.notes IS NULL OR c.notes NOT LIKE :illustrative_yield)
+          AND np.source_note IS NOT NULL AND LENGTH(TRIM(np.source_note)) > 0
+          AND np.source_note NOT LIKE :illustrative_nutrients
         ORDER BY c.name
     ');
-    $stmt->execute([':district_id' => $districtId]);
+    $stmt->execute([
+        ':district_id' => $districtId,
+        ':illustrative_source' => 'illustrative_estimate',
+        ':illustrative_yield' => 'Illustrative planning yield%',
+        ':illustrative_nutrients' => 'Illustrative seed estimate%',
+    ]);
     $rows = $stmt->fetchAll();
 
     if (empty($rows)) {
         return [];
     }
 
+    $statisticsQuery = $pdo->prepare('
+        SELECT
+            s.crop_id,
+            s.survey_year,
+            s.cultivated_area_ha,
+            s.harvested_area_ha,
+            s.production_tonnes,
+            s.published_yield_kg_per_hectare,
+            source.id AS data_source_id,
+            source.dataset_title,
+            source.publisher,
+            source.reference_url,
+            source.release_year,
+            source.imported_at,
+            source.is_active_for_scoring
+        FROM district_crop_statistics s
+        INNER JOIN agricultural_data_sources source ON source.id = s.data_source_id
+        WHERE s.district_id = :district_id AND s.season = :season
+          AND (source.is_active_for_scoring = 1 OR source.publisher = :nisr_publisher)
+    ');
+    $statisticsQuery->execute([
+        ':district_id' => $districtId,
+        ':season' => $season,
+        ':nisr_publisher' => NISR_PUBLISHER,
+    ]);
+    $yieldRecordsByCropAndSource = [];
+    foreach ($statisticsQuery->fetchAll() as $statistic) {
+        $yieldKgPerHectare = $statistic['published_yield_kg_per_hectare'] !== null
+            ? (float) $statistic['published_yield_kg_per_hectare']
+            : null;
+        if ($yieldKgPerHectare === null && $statistic['production_tonnes'] !== null) {
+            if ($statistic['harvested_area_ha'] !== null && (float) $statistic['harvested_area_ha'] > 0) {
+                $yieldKgPerHectare = ((float) $statistic['production_tonnes']
+                    / (float) $statistic['harvested_area_ha']) * 1000.0;
+            } elseif ($statistic['cultivated_area_ha'] !== null && (float) $statistic['cultivated_area_ha'] > 0) {
+                $yieldKgPerHectare = ((float) $statistic['production_tonnes']
+                    / (float) $statistic['cultivated_area_ha']) * 1000.0;
+            }
+        }
+        if ($yieldKgPerHectare === null || $yieldKgPerHectare < 0) {
+            continue;
+        }
+        $isNisrEvidence = $statistic['publisher'] === NISR_PUBLISHER;
+        if (!$isNisrEvidence && !(bool) $statistic['is_active_for_scoring']) {
+            continue;
+        }
+        $weight = $statistic['harvested_area_ha'] !== null
+            ? (float) $statistic['harvested_area_ha']
+            : (float) $statistic['cultivated_area_ha'];
+        if ($weight <= 0) {
+            $weight = 1.0;
+        }
+        $cropId = (int) $statistic['crop_id'];
+        $sourceId = (int) $statistic['data_source_id'];
+        if (!isset($yieldRecordsByCropAndSource[$cropId][$sourceId])) {
+            $yieldRecordsByCropAndSource[$cropId][$sourceId] = [
+                'weighted_yield_total' => 0.0,
+                'weight_total' => 0.0,
+                'years' => [],
+                'dataset_title' => (string) $statistic['dataset_title'],
+                'publisher' => (string) $statistic['publisher'],
+                'reference_url' => (string) $statistic['reference_url'],
+                'release_year' => (int) $statistic['release_year'],
+                'imported_at' => (string) $statistic['imported_at'],
+                'data_source_id' => $sourceId,
+            ];
+        }
+        $yieldRecordsByCropAndSource[$cropId][$sourceId]['weighted_yield_total'] += $yieldKgPerHectare * $weight;
+        $yieldRecordsByCropAndSource[$cropId][$sourceId]['weight_total'] += $weight;
+        $yieldRecordsByCropAndSource[$cropId][$sourceId]['years'][] = (int) $statistic['survey_year'];
+    }
+    $yieldStatistics = [];
+    foreach ($yieldRecordsByCropAndSource as $cropId => $sourceRecords) {
+        uasort($sourceRecords, static function (array $left, array $right): int {
+            $leftIsNisr = $left['publisher'] === NISR_PUBLISHER;
+            $rightIsNisr = $right['publisher'] === NISR_PUBLISHER;
+            if ($leftIsNisr !== $rightIsNisr) {
+                return $leftIsNisr ? -1 : 1;
+            }
+            return [$right['release_year'], $right['imported_at'], $right['data_source_id']]
+                <=> [$left['release_year'], $left['imported_at'], $left['data_source_id']];
+        });
+        $selectedSource = reset($sourceRecords);
+        if ($selectedSource === false) {
+            continue;
+        }
+        $years = array_values(array_unique($selectedSource['years']));
+        sort($years);
+        $yieldStatistics[$cropId] = [
+            'yield_kg_per_hectare' => $selectedSource['weighted_yield_total'] / $selectedSource['weight_total'],
+            'is_nisr_evidence' => $selectedSource['publisher'] === NISR_PUBLISHER,
+            'observation_years' => count($years),
+            'first_survey_year' => $years[0],
+            'last_survey_year' => $years[count($years) - 1],
+            'dataset_title' => $selectedSource['dataset_title'],
+            'publisher' => $selectedSource['publisher'],
+            'source_url' => $selectedSource['reference_url'],
+        ];
+    }
+    $observedYieldValues = array_column($yieldStatistics, 'yield_kg_per_hectare');
+    $observedYieldMinimum = $observedYieldValues === [] ? null : min($observedYieldValues);
+    $observedYieldMaximum = $observedYieldValues === [] ? null : max($observedYieldValues);
+
+    $rows = array_values(array_filter(
+        $rows,
+        static function (array $row) use ($yieldStatistics): bool {
+            return $row['typical_yield_kg_per_hectare'] !== null
+                || isset($yieldStatistics[(int) $row['crop_id']]);
+        }
+    ));
+    if ($rows === []) {
+        return [];
+    }
+
     $nutrientTotals = [];
     $nutrientTotalsByCrop = [];
     foreach ($rows as &$row) {
-        $row['market_score'] = compute_market_score($pdo, (int) $row['food_id']);
+        $row['production_priority_score'] = crop_production_priority_score((string) $row['food_category']);
+        $marketEvidence = compute_market_score($pdo, (int) $row['food_id'], $districtName);
+        $row['market_score'] = $marketEvidence['score'];
+        $row['market_observation_count'] = $marketEvidence['observation_count'];
+        $row['market_observation_dates'] = $marketEvidence['observation_dates'];
+        $row['market_first_date'] = $marketEvidence['first_date'];
+        $row['market_latest_date'] = $marketEvidence['latest_date'];
+        $row['market_source_references'] = $marketEvidence['source_references'];
+        $yieldEvidence = $yieldStatistics[(int) $row['crop_id']] ?? null;
+        if ($yieldEvidence !== null) {
+            $row['typical_yield_kg_per_hectare'] = $yieldEvidence['yield_kg_per_hectare'];
+            $row['yield_data_source'] = $yieldEvidence['dataset_title'];
+            $row['yield_source_publisher'] = $yieldEvidence['publisher'];
+            $row['yield_source_is_nisr'] = $yieldEvidence['is_nisr_evidence'];
+            $row['yield_source_reference'] = $yieldEvidence['source_url'];
+            $row['yield_observation_years'] = $yieldEvidence['observation_years'];
+            $row['yield_first_survey_year'] = $yieldEvidence['first_survey_year'];
+            $row['yield_last_survey_year'] = $yieldEvidence['last_survey_year'];
+        } else {
+            $row['yield_data_source'] = null;
+            $row['yield_source_publisher'] = null;
+            $row['yield_source_is_nisr'] = false;
+            $row['yield_source_reference'] = null;
+            $row['yield_observation_years'] = 0;
+            $row['yield_first_survey_year'] = null;
+            $row['yield_last_survey_year'] = null;
+        }
+        $row['observed_yield_score'] = null;
+        if ($yieldEvidence !== null) {
+            $row['observed_yield_score'] = $observedYieldMinimum !== null
+                && $observedYieldMaximum !== null
+                && $observedYieldMaximum > $observedYieldMinimum
+                ? (($yieldEvidence['yield_kg_per_hectare'] - $observedYieldMinimum)
+                    / ($observedYieldMaximum - $observedYieldMinimum)) * 100.0
+                : 50.0;
+        }
         $harvestKg = (float) $row['typical_yield_kg_per_hectare'];
         $row['harvest_tonnes_per_hectare'] = $harvestKg / 1000.0;
         $row['nutrition_per_hectare'] = [];
@@ -528,7 +848,43 @@ function run_crop_scorer(array $candidates, array $weights = []): array
         );
     }
 
-    return $decoded['results'] ?? [];
+    $results = $decoded['results'] ?? null;
+    if (!is_array($results) || count($results) !== count($candidates)) {
+        throw new RuntimeException(
+            'Crop scoring engine is out of date. Rebuild it with: ' . crop_scorer_build_command()
+        );
+    }
+
+    $candidatesById = [];
+    foreach ($candidates as $candidate) {
+        $candidatesById[(int) $candidate['crop_id']] = $candidate;
+    }
+    foreach ($results as &$result) {
+        $candidate = $candidatesById[(int) ($result['crop_id'] ?? 0)] ?? null;
+        if ($candidate === null || !isset($result['composite_score']) || !is_numeric($result['composite_score'])) {
+            throw new RuntimeException('The crop scoring engine returned an invalid candidate result.');
+        }
+        $result['scoring_weights'] = $weightsUsed;
+        $observedYieldScore = $candidate['observed_yield_score'] ?? null;
+        $hasObservedYieldEvidence = is_numeric($observedYieldScore);
+        $result['observed_yield_score'] = $hasObservedYieldEvidence ? (float) $observedYieldScore : null;
+        $result['has_observed_yield_evidence'] = $hasObservedYieldEvidence;
+        if ($hasObservedYieldEvidence) {
+            $result['composite_score'] = ((float) $result['composite_score'] * (1.0 - OBSERVED_YIELD_SCORE_WEIGHT))
+                + ((float) $observedYieldScore * OBSERVED_YIELD_SCORE_WEIGHT);
+        }
+        $productionPriorityScore = (float) $candidate['production_priority_score'];
+        $result['production_priority_score'] = $productionPriorityScore;
+        $result['composite_score'] = ((float) $result['composite_score'] * (1.0 - PRODUCTION_PRIORITY_SCORE_WEIGHT))
+            + ($productionPriorityScore * PRODUCTION_PRIORITY_SCORE_WEIGHT);
+    }
+    unset($result);
+
+    usort($results, static fn (array $left, array $right): int =>
+        (float) $right['composite_score'] <=> (float) $left['composite_score']
+    );
+
+    return $results;
 }
 
 /** Attach the erosion_risk/fertilizer_note context back onto scored results, for display. */
@@ -546,10 +902,27 @@ function merge_candidate_context(array $scoredResults, array $rawCandidates): ar
             $result['fertilizer_note'] = $context['fertilizer_note'];
             $result['soil_data_source'] = $context['source'];
             $result['source_reference'] = $context['source_reference'];
+            $result['suitability_updated_at'] = $context['suitability_updated_at'];
+            $result['crop_notes'] = $context['crop_notes'];
+            $result['harvest_days_min'] = $context['harvest_days_min'];
+            $result['harvest_days_max'] = $context['harvest_days_max'];
+            $result['yield_data_source'] = $context['yield_data_source'];
+            $result['yield_source_publisher'] = $context['yield_source_publisher'];
+            $result['yield_source_is_nisr'] = $context['yield_source_is_nisr'];
+            $result['yield_source_reference'] = $context['yield_source_reference'];
+            $result['yield_observation_years'] = $context['yield_observation_years'];
+            $result['yield_first_survey_year'] = $context['yield_first_survey_year'];
+            $result['yield_last_survey_year'] = $context['yield_last_survey_year'];
+            $result['market_observation_count'] = $context['market_observation_count'];
+            $result['market_observation_dates'] = $context['market_observation_dates'];
+            $result['market_first_date'] = $context['market_first_date'];
+            $result['market_latest_date'] = $context['market_latest_date'];
+            $result['market_source_references'] = $context['market_source_references'];
             $result['climate_baseline_score'] = $context['climate_baseline_score'] ?? $context['climate_score'];
             $result['weather_score'] = $context['weather_score'] ?? null;
             $result['rotation_guidance'] = $context['rotation_guidance'];
             $result['soil_stewardship_guidance'] = $context['soil_stewardship_guidance'];
+            $result['nutrition_source_note'] = $context['nutrition_source_note'];
             $result['food_name'] = $context['food_name'];
             $result['unit_label'] = $context['unit_label'];
             $result['typical_yield_kg_per_hectare'] = $context['typical_yield_kg_per_hectare'];
