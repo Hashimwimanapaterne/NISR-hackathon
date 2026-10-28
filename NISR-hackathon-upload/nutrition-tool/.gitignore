@@ -1,0 +1,5 @@
+.env
+*.log
+.DS_Store
+/vendor/
+/data/fdc_nutrient_candidates.csv
