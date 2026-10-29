@@ -1,8 +1,13 @@
 # Umurima Data
+Umurima Data
 
-**A district-level crop planning and food-access tool for Rwanda, built for the NISR Big Data Hackathon 2026 (Track 1: Agricultural Productivity).**
+A district-level crop planning and food-access tool for Rwanda, built for the NISR Big Data Hackathon 2026 (Track 1: Agricultural Productivity).
 
 Pick a district and a growing season. Umurima Data ranks 17 crops using official NISR yields, recent WFP market prices, USDA nutrient profiles, and a seasonal weather forecast, then shows what each crop would deliver per hectare in energy and protein. Every result cites its inputs and shows which scoring dimensions were left out because the data does not exist yet.
+
+Status: research prototype. Rankings are decision-support, not validated agronomic advice. See Limitations.
+
+Not a technical reader? Start with the plain-language guide (PDF), which explains what the tool does and how to use it without any setup.
 
 > **Status: research prototype.** Rankings are decision-support, not validated agronomic advice. See [Limitations](#limitations).
 
